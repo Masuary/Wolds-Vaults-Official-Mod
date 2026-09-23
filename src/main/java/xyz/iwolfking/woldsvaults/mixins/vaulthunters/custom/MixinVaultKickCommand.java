@@ -19,7 +19,7 @@ import java.util.UUID;
 public class MixinVaultKickCommand {
         @Inject(method = "lambda$kickFromVault$20", at = @At(value = "INVOKE", target = "Liskallia/vault/core/vault/player/Listeners;remove(Liskallia/vault/core/world/storage/VirtualWorld;Liskallia/vault/core/vault/Vault;Liskallia/vault/core/vault/player/Listener;)Liskallia/vault/core/vault/player/Listeners;"))
         private static void clearCuriosWhenRoyaleVault(Listener listener, Vault vault, boolean complete, Listeners listeners, VirtualWorld world, CallbackInfo ci) {
-            if (listener.getPlayer().isPresent() && VaultUtils.isRoyaleVault(vault)) {
+            if (listener.getPlayer().isPresent() && VaultUtils.isAnyRoyale(vault)) {
                 TrinketHelper.clearCurios(listener.getPlayer().get());
             }
         }

@@ -42,6 +42,7 @@ public class TrinketHelper {
     }
 
     public static void clearCurios(Player entity) {
+        xyz.iwolfking.woldsvaults.pouch.data.PouchRoyale.discardTemporary(entity);
         CuriosApi.getCuriosHelper()
                 .getCuriosHandler(entity)
                 .ifPresent(

@@ -83,6 +83,7 @@ public class WoldsVaults {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientSetup);
 
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        xyz.iwolfking.woldsvaults.pouch.PouchRegistration.register(modEventBus);
 
         modEventBus.register(new ModRecipeSerializers());
 
