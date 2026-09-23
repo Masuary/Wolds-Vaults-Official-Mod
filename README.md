@@ -10,6 +10,8 @@ Storage and Presets tabs on the left. Open an equipped pouch with Ctrl+T (rebind
 right-click an inventory pouch. Selected effects apply only while equipped.
 Collection hover text shows the name and available action; descriptions and uses
 appear in the details panel. Storage and Presets include compact detail tooltips.
+The inventory HUD shows selected pouch trinkets in their existing colour groups,
+with the configured icons and remaining-use indicators. Stored reserves stay hidden.
 
 Pouch editing and automatic replacement are locked from vault registration until
 the player has left the vault. Exhausted trinkets can be replaced afterward.

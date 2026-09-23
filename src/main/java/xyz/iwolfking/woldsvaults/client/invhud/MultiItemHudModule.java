@@ -31,6 +31,9 @@ import net.minecraft.world.item.ItemStack;
 import org.intellij.lang.annotations.Pattern;
 import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.SlotResult;
+import xyz.iwolfking.woldsvaults.pouch.data.PouchCapability;
+import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
+import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
 
 public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
     private final Supplier<List<ItemStack>> stackSupplier;
@@ -295,6 +298,9 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
     }
 
     public static List<ItemStack> getCurioSlotsByName(Player player, String identifier) {
+        if (player == null) {
+            return List.of(ItemStack.EMPTY);
+        }
         List<SlotResult> slots = CuriosApi.getCuriosHelper().findCurios(player, identifier);
         List<ItemStack> stacks = new ArrayList<>();
 
@@ -304,7 +310,18 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
             }
         }
 
-        return slots.isEmpty() ? List.of(ItemStack.EMPTY) : stacks;
+        ItemStack pouch = PouchRules.equipped(player);
+        if (PouchRules.COLORS.contains(identifier) && PouchRules.isPouch(pouch)) {
+            PouchContents contents = PouchCapability.get(pouch);
+            for (int index : PouchRules.validSelection(pouch, contents, contents.activeIndices())) {
+                ItemStack stack = contents.getStackInSlot(index);
+                if (identifier.equals(PouchRules.color(stack))) {
+                    stacks.add(stack);
+                }
+            }
+        }
+
+        return stacks.isEmpty() ? List.of(ItemStack.EMPTY) : stacks;
     }
 
 }
