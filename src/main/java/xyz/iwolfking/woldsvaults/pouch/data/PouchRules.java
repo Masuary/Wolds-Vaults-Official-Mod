@@ -1,5 +1,6 @@
 package xyz.iwolfking.woldsvaults.pouch.data;
 
+import iskallia.vault.core.vault.Vault;
 import iskallia.vault.gear.trinket.TrinketEffect;
 import iskallia.vault.gear.trinket.TrinketHelper;
 import iskallia.vault.integration.IntegrationCurios;
@@ -49,8 +50,12 @@ public final class PouchRules {
     }
 
     public static boolean locked(Player player) {
-        return player.level.dimension().location().getNamespace().equals("the_vault")
-                || (!player.level.isClientSide && ServerVaults.get(player.level).isPresent());
+        if (player.level.dimension().location().getNamespace().equals("the_vault")) return true;
+        if (player.level.isClientSide) return false;
+        if (ServerVaults.get(player.level).isPresent()) return true;
+        // Entry charges trinket uses before teleporting the registered listener out of the overworld.
+        return ServerVaults.getAll().stream().anyMatch(vault -> vault.has(Vault.LISTENERS)
+                && vault.get(Vault.LISTENERS).contains(player.getUUID()));
     }
 
     public static Map<String, Integer> capacities(ItemStack pouch) {

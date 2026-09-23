@@ -11,8 +11,10 @@ right-click an inventory pouch. Selected effects apply only while equipped.
 Collection hover text shows the name and available action; descriptions and uses
 appear in the details panel. Storage and Presets include compact detail tooltips.
 
-Pouch editing is locked inside vaults. Royale uses a temporary pouch for its
-starting trinket choices and restores the personal pouch afterward. Install
+Pouch editing and automatic replacement are locked from vault registration until
+the player has left the vault. Exhausted trinkets can be replaced afterward.
+Royale uses a temporary pouch for its starting trinket choices and restores the
+personal pouch afterward. Install
 matching Wolds builds on the server and client; do not also install the standalone
 Trinket Collection prototype.
 
