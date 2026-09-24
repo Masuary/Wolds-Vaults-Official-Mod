@@ -5,11 +5,16 @@ Please feel free to open a PR and contribute if you'd like! All are more than we
 ## Trinket pouches
 
 Pouches store real trinkets in one Curios slot. The collection screen provides
-search, filters, compact trinket descriptions and three named loadout presets, with separate
-Storage and Presets tabs on the left. Open an equipped pouch with Ctrl+T (rebindable), or
+search, filters and compact trinket descriptions. The Storage tab combines the
+physical inventory with three named loadout presets, a selected-preset preview,
+and Apply, Save and Rename controls. Open an equipped pouch with Ctrl+T (rebindable), or
 right-click an inventory pouch. Selected effects apply only while equipped.
+Presets remember trinket types, so removing or exhausting a copy never erases the saved
+loadout. Applying a preset uses available copies and reports missing entries. Refill
+missing types and apply again to restore the full loadout, regardless of auto-replace.
+Existing slot-based presets migrate automatically when the pouch loads.
 Collection hover text shows the name and available action; descriptions and uses
-appear in the details panel. Storage and Presets include compact detail tooltips.
+appear in the details panel. Storage items and preset previews include compact detail tooltips.
 The inventory HUD shows selected pouch trinkets in their existing colour groups,
 with the configured icons and remaining-use indicators. Stored reserves stay hidden.
 With auto-replace enabled, the collection details and HUD combine remaining uses

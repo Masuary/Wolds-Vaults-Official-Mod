@@ -9,6 +9,7 @@ import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchRuntime;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nonnull;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.TextComponent;
@@ -38,6 +39,7 @@ public final class PouchMenu extends AbstractContainerMenu {
     private String status = "";
     private boolean storedView;
     private boolean locked;
+    private boolean receivingSlotSync;
 
     public static void open(ServerPlayer player, int pouchSlot) {
         if (player.containerMenu instanceof PouchMenu || !player.containerMenu.getCarried().isEmpty()
@@ -78,6 +80,16 @@ public final class PouchMenu extends AbstractContainerMenu {
             addSlot(new SlotItemHandler(contents, index, PouchLayout.GRID_X + 1 + index % 9 * 18,
                     PouchLayout.GRID_Y + 1 + index / 9 * 18) {
                 @Override
+                public void set(@Nonnull ItemStack stack) {
+                    if (receivingSlotSync) {
+                        contents.synchronizeStackInSlot(getSlotIndex(), stack);
+                        setChanged();
+                    } else {
+                        super.set(stack);
+                    }
+                }
+
+                @Override
                 public boolean mayPlace(ItemStack stack) {
                     return !isLocked() && super.mayPlace(stack);
                 }
@@ -89,7 +101,7 @@ public final class PouchMenu extends AbstractContainerMenu {
 
                 @Override
                 public int getMaxStackSize(ItemStack stack) {
-                    // The default SlotItemHandler probe temporarily empties the slot, which would erase presets.
+                    // The default SlotItemHandler probe temporarily empties the slot, which would clear the active selection.
                     return 1;
                 }
 
@@ -194,7 +206,13 @@ public final class PouchMenu extends AbstractContainerMenu {
             contents.savePreset(button - SAVE_PRESET);
             status = "Preset saved";
         } else if (button >= APPLY_PRESET && button < APPLY_PRESET + PouchContents.PRESET_COUNT) {
-            apply(contents.preset(button - APPLY_PRESET));
+            int preset = button - APPLY_PRESET;
+            List<Integer> available = contents.resolvePreset(preset);
+            apply(available);
+            if (status.isEmpty()) {
+                int missing = contents.preset(preset).size() - available.size();
+                status = missing == 0 ? "Preset applied" : available.size() + " applied, " + missing + " missing";
+            }
         } else if (button == AUTO_REPLACE) {
             contents.toggleAutoReplace();
         } else {
@@ -227,13 +245,44 @@ public final class PouchMenu extends AbstractContainerMenu {
     }
 
     @Override
+    public void setItem(int slot, int stateId, @Nonnull ItemStack stack) {
+        receivingSlotSync = owner.level.isClientSide;
+        try {
+            super.setItem(slot, stateId, stack);
+        } finally {
+            receivingSlotSync = false;
+        }
+    }
+
+    @Override
+    public void initializeContents(int stateId, @Nonnull List<ItemStack> stacks, @Nonnull ItemStack carried) {
+        receivingSlotSync = owner.level.isClientSide;
+        try {
+            super.initializeContents(stateId, stacks, carried);
+        } finally {
+            receivingSlotSync = false;
+        }
+    }
+
+    @Override
+    public void sendAllDataToRemote() {
+        super.sendAllDataToRemote();
+        // Vanilla full corrections must also restore selections lost during client prediction.
+        sendPouchState(true);
+    }
+
+    @Override
     public void broadcastChanges() {
         super.broadcastChanges();
+        sendPouchState(false);
+    }
+
+    private void sendPouchState(boolean force) {
         if (owner instanceof ServerPlayer player) {
             CompoundTag state = contents.serializeNBT();
             state.putBoolean("Locked", PouchRules.locked(owner));
             state.putString("Status", status);
-            if (!state.equals(lastState)) {
+            if (force || !state.equals(lastState)) {
                 lastState = state;
                 PouchNetwork.sendState(player, containerId, state);
             }

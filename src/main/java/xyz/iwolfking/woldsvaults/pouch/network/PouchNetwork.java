@@ -13,7 +13,7 @@ import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
 import xyz.iwolfking.woldsvaults.pouch.menu.PouchMenu;
 
 public final class PouchNetwork {
-    private static final String VERSION = "1";
+    private static final String VERSION = "2";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(WoldsVaults.id("trinket_pouch"),
             () -> VERSION, VERSION::equals, VERSION::equals);
 

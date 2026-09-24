@@ -7,19 +7,21 @@ import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.items.ItemStackHandler;
 
-/** The capability owns the actual stacks. Active and preset entries are indices, never copies. */
+/** Owns physical stacks and active slot indices; presets remember effect keys independently of storage. */
 public final class PouchContents extends ItemStackHandler {
     public static final int SIZE = 27;
-    public static final int SCHEMA = 2;
+    public static final int SCHEMA = 3;
     public static final int PRESET_COUNT = 3;
     public static final int MAX_PRESET_NAME_LENGTH = 24;
     private static final List<String> DEFAULT_PRESET_NAMES = List.of("Combat", "Looting", "Exploration");
     private final List<String> presetNames = new ArrayList<>(DEFAULT_PRESET_NAMES);
     private final Set<Integer> active = new LinkedHashSet<>();
-    private final List<Set<Integer>> presets = List.of(new LinkedHashSet<>(), new LinkedHashSet<>(), new LinkedHashSet<>());
+    private final List<Set<String>> presets = List.of(new LinkedHashSet<>(), new LinkedHashSet<>(), new LinkedHashSet<>());
     private boolean autoReplace;
 
     public PouchContents() {
@@ -38,13 +40,23 @@ public final class PouchContents extends ItemStackHandler {
 
     @Override
     public void setStackInSlot(int slot, ItemStack stack) {
-        if (!stack.isEmpty() && (!PouchRules.isStoredItem(stack) || stack.getCount() != 1)) {
-            throw new IllegalArgumentException("Pouch storage requires one trinket per slot");
-        }
+        validateStoredStack(stack);
         if (getStackInSlot(slot) != stack && !ItemStack.matches(getStackInSlot(slot), stack)) {
             forget(slot);
         }
         super.setStackInSlot(slot, stack);
+    }
+
+    public void synchronizeStackInSlot(int slot, ItemStack stack) {
+        validateStoredStack(stack);
+        // Network replacements can differ only in client display caches, not the stored trinket.
+        super.setStackInSlot(slot, stack);
+    }
+
+    private static void validateStoredStack(ItemStack stack) {
+        if (!stack.isEmpty() && (!PouchRules.isStoredItem(stack) || stack.getCount() != 1)) {
+            throw new IllegalArgumentException("Pouch storage requires one trinket per slot");
+        }
     }
 
     @Override
@@ -56,7 +68,6 @@ public final class PouchContents extends ItemStackHandler {
 
     private void forget(int slot) {
         active.remove(slot);
-        presets.forEach(preset -> preset.remove(slot));
     }
 
     public List<Integer> activeIndices() {
@@ -83,13 +94,35 @@ public final class PouchContents extends ItemStackHandler {
     }
 
     public void savePreset(int preset) {
-        Set<Integer> selection = presets.get(preset);
-        selection.clear();
-        selection.addAll(active);
+        Set<String> selection = new LinkedHashSet<>();
+        for (ItemStack stack : activeStacks()) selection.add(validatedEffectKey(PouchRules.effectKey(stack)));
+        presets.get(preset).clear();
+        presets.get(preset).addAll(selection);
     }
 
-    public List<Integer> preset(int preset) {
+    public List<String> preset(int preset) {
         return List.copyOf(presets.get(preset));
+    }
+
+    public List<Integer> resolvePreset(int preset) {
+        return preset(preset).stream().map(this::usableIndex).filter(index -> index >= 0).toList();
+    }
+
+    public int usableIndex(String effectKey) {
+        int chosen = -1;
+        int fewestUses = Integer.MAX_VALUE;
+        for (int index = 0; index < SIZE; index++) {
+            ItemStack stack = getStackInSlot(index);
+            if (!PouchRules.isTrinket(stack) || !effectKey.equals(PouchRules.effectKey(stack))) continue;
+            int uses = PouchRules.remainingUses(stack);
+            if (uses == 0) continue;
+            if (isActive(index)) return index;
+            if (uses < fewestUses) {
+                chosen = index;
+                fewestUses = uses;
+            }
+        }
+        return chosen;
     }
 
     public String presetName(int preset) {
@@ -142,7 +175,9 @@ public final class PouchContents extends ItemStackHandler {
         result.putInt("Schema", SCHEMA);
         result.putIntArray("Active", active.stream().mapToInt(Integer::intValue).toArray());
         for (int index = 0; index < presets.size(); index++) {
-            result.putIntArray("Preset" + index, presets.get(index).stream().mapToInt(Integer::intValue).toArray());
+            ListTag entries = new ListTag();
+            presets.get(index).forEach(key -> entries.add(StringTag.valueOf(key)));
+            result.put("Preset" + index, entries);
             result.putString("PresetName" + index, presetNames.get(index));
         }
         result.putBoolean("AutoReplace", autoReplace);
@@ -171,10 +206,20 @@ public final class PouchContents extends ItemStackHandler {
             decoded.add(stack);
         }
         List<Integer> decodedActive = readIndices(tag.getIntArray("Active"), occupied);
-        List<List<Integer>> decodedPresets = new ArrayList<>();
+        List<List<String>> decodedPresets = new ArrayList<>();
         List<String> decodedNames = new ArrayList<>();
         for (int index = 0; index < presets.size(); index++) {
-            decodedPresets.add(readIndices(tag.getIntArray("Preset" + index), occupied));
+            if (tag.getInt("Schema") < 3) {
+                List<Integer> indices = readIndices(tag.getIntArray("Preset" + index), occupied);
+                Set<String> migrated = new LinkedHashSet<>();
+                for (int slot : indices) {
+                    int entry = new ArrayList<>(occupied).indexOf(slot);
+                    migrated.add(validatedEffectKey(PouchRules.effectKey(decoded.get(entry))));
+                }
+                decodedPresets.add(List.copyOf(migrated));
+            } else {
+                decodedPresets.add(readPreset(tag, "Preset" + index));
+            }
             decodedNames.add(tag.getInt("Schema") == 1 ? DEFAULT_PRESET_NAMES.get(index)
                     : validatedPresetName(tag.getString("PresetName" + index)));
         }
@@ -192,6 +237,29 @@ public final class PouchContents extends ItemStackHandler {
             presetNames.set(index, decodedNames.get(index));
         }
         autoReplace = tag.getBoolean("AutoReplace");
+    }
+
+    private static List<String> readPreset(CompoundTag tag, String name) {
+        if (!(tag.get(name) instanceof ListTag entries) || entries.size() > SIZE
+                || !entries.isEmpty() && entries.getElementType() != Tag.TAG_STRING) {
+            throw new IllegalStateException("Invalid pouch preset " + name + "; refusing to discard data");
+        }
+        Set<String> result = new LinkedHashSet<>();
+        for (int index = 0; index < entries.size(); index++) {
+            String key = validatedEffectKey(entries.getString(index));
+            if (!result.add(key)) throw new IllegalStateException("Duplicate pouch preset effect: " + key);
+        }
+        return List.copyOf(result);
+    }
+
+    private static String validatedEffectKey(String key) {
+        Set<String> effects = new LinkedHashSet<>();
+        for (String effect : key.split("\\+", -1)) {
+            if (!effect.contains(":") || ResourceLocation.tryParse(effect) == null || !effects.add(effect)) {
+                throw new IllegalStateException("Invalid pouch preset effect key: " + key + "; refusing to discard data");
+            }
+        }
+        return key;
     }
 
     private static List<Integer> readIndices(int[] values, Set<Integer> occupied) {

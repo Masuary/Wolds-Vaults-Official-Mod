@@ -42,6 +42,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     private static final String[] COLOR_NAMES = {"Red", "Blue", "Green"};
     private static final int[] COLORS = {0xAD4949, 0x397BAC, 0x548237};
     private final Map<String, ItemStack> catalog = new LinkedHashMap<>();
+    private final Map<String, Integer> usablePresetCopies = new LinkedHashMap<>();
     private List<Entry> entries = List.of();
     private String inspectedKey = "";
     private boolean keyboardNavigation;
@@ -145,27 +146,26 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 label("trinkets").getString(), collectionScroll)));
         for (int preset = 0; preset < PouchContents.PRESET_COUNT; preset++) {
             final int index = preset;
-            presetSelectors.add(addRenderableWidget(new Button(leftPos + 11, topPos + 12 + preset * 29, 76, 25,
-                    text(menu.contents().presetName(index)), ignored -> {
+            presetSelectors.add(addRenderableWidget(new Button(leftPos + 182 + preset * 32, topPos + 28, 29, 16,
+                    text(String.valueOf(index + 1)), ignored -> {
                         selectedPreset = index;
                         presetScroll.setFirstRow(0);
                         updateControls();
                     }) {
                 @Override
                 public void renderButton(PoseStack pose, int mouseX, int mouseY, float partialTick) {
-                    int color = selectedPreset == index ? 0xFF84916F : isHoveredOrFocused() ? 0xFFCCCCCC : 0xFFB8B8B8;
-                    fill(pose, x, y, x + width, y + height, color);
-                    font.draw(pose, fit(getMessage().getString(), width - 8), x + 4, y + 7,
-                            selectedPreset == index ? 0x26391C : TEXT);
+                    smallButton(pose, x, y, width, height, active && isHoveredOrFocused());
+                    if (selectedPreset == index) fill(pose, x + 2, y + 2, x + width - 2, y + height - 2, 0xFF64715C);
+                    drawCenteredString(pose, font, getMessage(), x + width / 2, y + 4, 0xFFFFFF);
                 }
             }));
         }
-        renamePreset = button(231, 11, 49, "rename", ignored -> openDialog(Dialog.RENAME, selectedPreset));
-        savePreset = button(154, 157, 75, "save_current", ignored -> {
+        renamePreset = button(228, 149, 47, 16, "rename", ignored -> openDialog(Dialog.RENAME, selectedPreset));
+        savePreset = button(182, 149, 43, 16, "save", ignored -> {
             if (menu.contents().preset(selectedPreset).isEmpty()) action(PouchMenu.SAVE_PRESET + selectedPreset);
             else openDialog(Dialog.OVERWRITE, selectedPreset);
         });
-        applyPreset = button(233, 157, 47, "apply", ignored -> action(PouchMenu.APPLY_PRESET + selectedPreset));
+        applyPreset = button(182, 128, 93, 16, "apply_preset", ignored -> action(PouchMenu.APPLY_PRESET + selectedPreset));
         autoReplace = button(11, PouchLayout.FOOTER_Y - 1, 12, "off", ignored -> action(PouchMenu.AUTO_REPLACE));
         scrollBars.add(addRenderableWidget(new PouchScrollBar(leftPos + 272, topPos + PouchLayout.PREVIEW_Y,
                 PouchLayout.PREVIEW_SCROLL_HEIGHT,
@@ -182,11 +182,14 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     }
 
     private Button button(int x, int y, int width, String label, Button.OnPress action) {
-        return addRenderableWidget(new Button(leftPos + x, topPos + y, width, 14, label(label), action) {
+        return button(x, y, width, 14, label, action);
+    }
+
+    private Button button(int x, int y, int width, int height, String label, Button.OnPress action) {
+        return addRenderableWidget(new Button(leftPos + x, topPos + y, width, height, label(label), action) {
             @Override
             public void renderButton(PoseStack pose, int mouseX, int mouseY, float partialTick) {
                 smallButton(pose, this.x, this.y, this.width, height, active && isHoveredOrFocused());
-                if (this == applyPreset && active) fill(pose, this.x + 2, this.y + 2, this.x + this.width - 2, this.y + height - 2, 0xFF60744C);
                 if (this == autoReplace) {
                     if (menu.contents().autoReplace()) {
                         drawCheckboxCross(pose, this.x + (width - 6) / 2, this.y + (height - 6) / 2,
@@ -194,7 +197,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                     }
                     return;
                 }
-                drawCenteredString(pose, font, fit(getMessage().getString(), this.width - 6), this.x + this.width / 2, this.y + 3, active ? 0xFFFFFF : 0xAAAAAA);
+                drawCenteredString(pose, font, fit(getMessage().getString(), this.width - 6), this.x + this.width / 2, this.y + (height - 8) / 2, active ? 0xFFFFFF : 0xAAAAAA);
             }
         });
     }
@@ -320,16 +323,16 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         }
         for (int preset = 0; preset < presetSelectors.size(); preset++) {
             Button control = presetSelectors.get(preset);
-            control.visible = view == View.PRESETS;
+            control.visible = view == View.STORAGE;
             control.active = !modal;
-            control.setMessage(text(menu.contents().presetName(preset)));
+            control.setMessage(text(String.valueOf(preset + 1)));
         }
         for (Button control : List.of(renamePreset, savePreset, applyPreset)) {
-            control.visible = view == View.PRESETS;
+            control.visible = view == View.STORAGE;
             control.active = !modal && !menu.isLocked();
         }
         presetScroll.setEntryCount(menu.contents().preset(selectedPreset).size());
-        scrollBars.get(1).visible = view == View.PRESETS && presetScroll.canScroll();
+        scrollBars.get(1).visible = view == View.STORAGE && presetScroll.canScroll();
         scrollBars.get(1).active = !modal;
         autoReplace.visible = true;
         autoReplace.active = !modal && !menu.isLocked();
@@ -380,6 +383,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     @Override
     public void render(PoseStack pose, int mouseX, int mouseY, float partialTick) {
         removeOverlappingExternalControls();
+        if (view == View.STORAGE) refreshPresetCopies();
         int inspectedCell = collectionInspectedCell(mouseX, mouseY);
         if (view == View.COLLECTION && inspectedCell >= 0) {
             inspectedKey = PouchRules.effectKey(entry(inspectedCell).icon());
@@ -461,32 +465,70 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             for (Slot slot : menu.slots) {
                 if (slot.isActive()) inset(pose, leftPos + slot.x - 1, topPos + slot.y - 1);
             }
-        } else {
-            recessed(pose, leftPos + 8, topPos + 8, 82, 164);
-            recessed(pose, leftPos + 96, topPos + 49, 184, PouchLayout.PREVIEW_PANEL_HEIGHT);
+            recessed(pose, leftPos + PouchLayout.PRESET_PANEL_X, topPos + PouchLayout.PRESET_PANEL_Y,
+                    PouchLayout.PRESET_PANEL_WIDTH, PouchLayout.PREVIEW_PANEL_HEIGHT);
             for (int cell = 0; cell < PouchLayout.PREVIEW_COLUMNS * PouchLayout.PREVIEW_ROWS; cell++) {
-                ItemStack stack = presetEntry(cell);
-                if (stack.isEmpty()) continue;
+                PresetEntry entry = presetEntry(cell);
+                if (entry == null) continue;
+                ItemStack stack = entry.icon();
                 int x = leftPos + previewX(cell);
                 int y = topPos + previewY(cell);
                 collectionSlot(pose, x, y, false);
                 int lane = PouchRules.COLORS.indexOf(PouchRules.color(stack));
                 if (lane >= 0) fill(pose, x + 1, y + 1, x + 19, y + 2, 0xFF000000 | COLORS[lane]);
                 itemRenderer.renderAndDecorateItem(stack, x + 2, y + 2);
+                if (entry.missing()) {
+                    RenderSystem.disableDepthTest();
+                    fill(pose, x + 2, y + 2, x + 18, y + 18, 0xAA8B8B8B);
+                    font.drawShadow(pose, "!", x + 14, y + 10, 0xFF7777);
+                    RenderSystem.enableDepthTest();
+                }
             }
         }
     }
 
     private static int previewX(int cell) { return PouchLayout.PREVIEW_X + cell % PouchLayout.PREVIEW_COLUMNS * PouchLayout.PREVIEW_PITCH; }
-    private static int previewY(int cell) { return PouchLayout.PREVIEW_Y + cell / PouchLayout.PREVIEW_COLUMNS * 22; }
+    private static int previewY(int cell) { return PouchLayout.PREVIEW_Y + cell / PouchLayout.PREVIEW_COLUMNS * PouchLayout.PREVIEW_PITCH; }
 
-    private ItemStack presetEntry(int cell) {
+    private void refreshPresetCopies() {
+        usablePresetCopies.clear();
+        for (int index = 0; index < PouchContents.SIZE; index++) {
+            ItemStack stack = menu.contents().getStackInSlot(index);
+            if (!PouchRules.isTrinket(stack) || PouchRules.remainingUses(stack) == 0) continue;
+            String key = PouchRules.effectKey(stack);
+            Integer previous = usablePresetCopies.get(key);
+            if (previous == null || !menu.contents().isActive(previous)
+                    && (menu.contents().isActive(index) || PouchRules.remainingUses(stack)
+                    < PouchRules.remainingUses(menu.contents().getStackInSlot(previous)))) {
+                usablePresetCopies.put(key, index);
+            }
+        }
+    }
+
+    private record PresetEntry(ItemStack icon, boolean missing) {}
+
+    private PresetEntry presetEntry(int cell) {
+        List<String> keys = menu.contents().preset(selectedPreset);
+        // A state packet can shrink the preset between container ticks and rendering.
+        presetScroll.setEntryCount(keys.size());
         int index = presetScroll.entryIndex(cell);
-        return index < 0 ? ItemStack.EMPTY : menu.contents().getStackInSlot(menu.contents().preset(selectedPreset).get(index));
+        if (index < 0) return null;
+        String key = keys.get(index);
+        int stored = usablePresetCopies.getOrDefault(key, -1);
+        if (stored >= 0) return new PresetEntry(menu.contents().getStackInSlot(stored), false);
+        ItemStack icon = catalog.get(key);
+        if (icon == null) icon = new ItemStack(Items.BARRIER).setHoverName(text(key));
+        return new PresetEntry(icon, true);
     }
 
     private boolean matchesPreset(int preset) {
-        return new HashSet<>(menu.contents().preset(preset)).equals(new HashSet<>(menu.contents().activeIndices()));
+        Set<String> activeKeys = new HashSet<>();
+        menu.contents().activeStacks().forEach(stack -> activeKeys.add(PouchRules.effectKey(stack)));
+        return new HashSet<>(menu.contents().preset(preset)).equals(activeKeys);
+    }
+
+    private int missingPresetEntries() {
+        return (int) menu.contents().preset(selectedPreset).stream().filter(key -> !usablePresetCopies.containsKey(key)).count();
     }
 
     private String selectionError(Entry entry) {
@@ -516,12 +558,16 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             String stored = (PouchContents.SIZE - menu.contents().emptySlots()) + "/27";
             font.draw(pose, stored, PouchLayout.GRID_X + 162 - font.width(stored), PouchLayout.GRID_Y - 10, MUTED);
             font.draw(pose, playerInventoryTitle, PouchLayout.GRID_X, PouchLayout.INVENTORY_Y - 10, TEXT);
-        } else {
-            font.draw(pose, fit(menu.contents().presetName(selectedPreset), 129), 97, 14, TEXT);
-            font.draw(pose, fit(label("preset_count", menu.contents().preset(selectedPreset).size(),
-                    label(matchesPreset(selectedPreset) ? "matches" : "not_matching")).getString(), 183), 97, 34, MUTED);
-            if (menu.contents().preset(selectedPreset).isEmpty()) font.draw(pose, label("empty_preset"), 103, 62, MUTED);
-            if (!menu.status().isEmpty()) font.draw(pose, fit(menu.status(), 53), 97, 160, TEXT);
+
+            font.draw(pose, label("presets"), 181, 14, TEXT);
+            font.draw(pose, fit(menu.contents().presetName(selectedPreset), 92), 183, 51, TEXT);
+            if (menu.contents().preset(selectedPreset).isEmpty()) {
+                drawWrapped(pose, label("empty_preset"), 183, 76, 92, 2, MUTED);
+            }
+            int missing = missingPresetEntries();
+            String feedback = missing > 0 ? label("preset_missing_count", missing).getString()
+                    : menu.status().isEmpty() ? label("preset_selected", menu.contents().preset(selectedPreset).size()).getString() : menu.status();
+            font.draw(pose, fit(feedback, 92), 183, 113, missing > 0 ? 0x992222 : matchesPreset(selectedPreset) ? 0x435B33 : MUTED);
         }
     }
 
@@ -595,7 +641,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             }
             if (ownership.isHoveredOrFocused()) tooltip(pose, mouseX, mouseY, ownedOnly ? label("show_catalog").getString() : label("show_owned").getString());
         }
-        if (view == View.PRESETS) {
+        if (view == View.STORAGE) {
             for (int index = 0; index < presetSelectors.size(); index++) {
                 if (presetSelectors.get(index).isHoveredOrFocused()) {
                     tooltip(pose, mouseX, mouseY, menu.contents().presetName(index), label("preview_hint").getString());
@@ -603,9 +649,11 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 }
             }
             for (int cell = 0; cell < PouchLayout.PREVIEW_COLUMNS * PouchLayout.PREVIEW_ROWS; cell++) {
-                ItemStack stack = presetEntry(cell);
-                if (!stack.isEmpty() && inside(mouseX, mouseY, previewX(cell), previewY(cell), 20, 20)) {
-                    renderCompactTrinketTooltip(pose, stack, mouseX, mouseY);
+                PresetEntry entry = presetEntry(cell);
+                if (entry != null && inside(mouseX, mouseY, previewX(cell), previewY(cell), 20, 20)) {
+                    if (entry.missing()) tooltip(pose, mouseX, mouseY, entry.icon().getHoverName(),
+                            label("preset_missing").copy().withStyle(ChatFormatting.RED));
+                    else renderCompactTrinketTooltip(pose, entry.icon(), mouseX, mouseY);
                     return;
                 }
             }
@@ -613,7 +661,13 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             if (savePreset.isHoveredOrFocused()) tooltip(pose, mouseX, mouseY, label("save_hint").getString());
             if (applyPreset.isHoveredOrFocused()) tooltip(pose, mouseX, mouseY, label("apply_hint").getString());
 
-            if (!menu.status().isEmpty() && inside(mouseX, mouseY, 97, 157, 53, 14)) tooltip(pose, mouseX, mouseY, menu.status());
+            if (inside(mouseX, mouseY, 183, 51, 92, 10)) tooltip(pose, mouseX, mouseY, menu.contents().presetName(selectedPreset));
+            if (inside(mouseX, mouseY, 183, 111, 92, 13)) {
+                Component count = label("preset_count", menu.contents().preset(selectedPreset).size(),
+                        label(matchesPreset(selectedPreset) ? "matches" : "not_matching"));
+                if (menu.status().isEmpty()) tooltip(pose, mouseX, mouseY, count);
+                else tooltip(pose, mouseX, mouseY, text(menu.status()), count);
+            }
         }
         for (int index = 0; index < scrollBars.size(); index++) {
             PouchScrollBar bar = scrollBars.get(index);
@@ -758,7 +812,8 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             collectionScroll.scroll(amount < 0 ? 1 : amount > 0 ? -1 : 0);
             updateControls();
             return true;
-        } else if (view == View.PRESETS && inside(x, y, 96, 49, 184, PouchLayout.PREVIEW_PANEL_HEIGHT)) {
+        } else if (view == View.STORAGE && inside(x, y, PouchLayout.PRESET_PANEL_X, PouchLayout.PREVIEW_Y,
+                PouchLayout.PRESET_PANEL_WIDTH, PouchLayout.PREVIEW_SCROLL_HEIGHT)) {
             presetScroll.scroll(amount < 0 ? 1 : amount > 0 ? -1 : 0);
             updateControls();
             return true;
@@ -800,8 +855,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                     fill(pose, x + column * 5, y + row * 5, x + column * 5 + 3, y + row * 5 + 3, 0xFF40483A);
                 }
             }
-        } else {
-            for (int row = 0; row < 3; row++) fill(pose, x, y + row * 5, x + 14, y + row * 5 + 3, 0xFF404040);
+
         }
     }
 
@@ -856,7 +910,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     }
 
     private enum View {
-        COLLECTION("trinkets"), STORAGE("storage"), PRESETS("presets");
+        COLLECTION("trinkets"), STORAGE("storage");
         private final String label;
         View(String label) { this.label = label; }
     }

@@ -272,7 +272,7 @@ public class ModLanguageProvider extends LanguageProvider {
         add("gui.woldsvaults.pouch.preview_hint", "View saved trinkets. Apply to activate them.");
         add("gui.woldsvaults.pouch.rename_hint", "Rename this preset");
         add("gui.woldsvaults.pouch.save_hint", "Save current active trinkets to this preset");
-        add("gui.woldsvaults.pouch.apply_hint", "Activate this preset's saved trinkets");
+        add("gui.woldsvaults.pouch.apply_hint", "Activate available copies; keep missing entries saved");
         add("gui.woldsvaults.pouch.scroll_hint", "Scroll or drag to see more");
         add("gui.woldsvaults.pouch.rename_title", "Rename preset");
         add("gui.woldsvaults.pouch.overwrite_title", "Replace saved preset?");
@@ -299,6 +299,10 @@ public class ModLanguageProvider extends LanguageProvider {
         add("gui.woldsvaults.pouch.rename", "Rename");
         add("gui.woldsvaults.pouch.save_current", "Save current");
         add("gui.woldsvaults.pouch.apply", "Apply");
+        add("gui.woldsvaults.pouch.apply_preset", "Apply preset");
+        add("gui.woldsvaults.pouch.preset_selected", "%s selected");
+        add("gui.woldsvaults.pouch.preset_missing", "Missing - add a usable copy to the pouch");
+        add("gui.woldsvaults.pouch.preset_missing_count", "%s missing");
         add("gui.woldsvaults.pouch.off", "Off");
         add("gui.woldsvaults.pouch.preset_name", "Preset name");
         add("gui.woldsvaults.pouch.save", "Save");
