@@ -13,6 +13,10 @@ Presets remember trinket types, so removing or exhausting a copy never erases th
 loadout. Applying a preset uses available copies and reports missing entries. Refill
 missing types and apply again to restore the full loadout, regardless of auto-replace.
 Existing slot-based presets migrate automatically when the pouch loads.
+The viewed preset has a neutral outline; a muted tint marks the last applied preset.
+Identical presets show Same loadout. Partial applications keep their preset identity,
+while manual selection changes switch to Custom loadout. Save, Apply and Rename
+confirmations briefly appear on their own buttons without replacing the loadout status.
 Collection hover text shows the name and available action; descriptions and uses
 appear in the details panel. Storage items and preset previews include compact detail tooltips.
 The inventory HUD shows selected pouch trinkets in their existing colour groups,

@@ -301,6 +301,15 @@ public class ModLanguageProvider extends LanguageProvider {
         add("gui.woldsvaults.pouch.apply", "Apply");
         add("gui.woldsvaults.pouch.apply_preset", "Apply preset");
         add("gui.woldsvaults.pouch.preset_selected", "%s selected");
+        add("gui.woldsvaults.pouch.preset_saved", "Saved");
+        add("gui.woldsvaults.pouch.preset_applied", "Applied");
+        add("gui.woldsvaults.pouch.preset_renamed", "Renamed");
+        add("gui.woldsvaults.pouch.preset_partial", "Partial: %s/%s");
+        add("gui.woldsvaults.pouch.preset_same_loadout", "Same loadout");
+        add("gui.woldsvaults.pouch.preset_custom", "Custom loadout");
+        add("gui.woldsvaults.pouch.preset_empty", "Empty preset");
+        add("gui.woldsvaults.pouch.preset_current", "Applied preset: %s");
+        add("gui.woldsvaults.pouch.preset_details", "%s saved | %s active");
         add("gui.woldsvaults.pouch.preset_missing", "Missing - add a usable copy to the pouch");
         add("gui.woldsvaults.pouch.preset_missing_count", "%s missing");
         add("gui.woldsvaults.pouch.off", "Off");

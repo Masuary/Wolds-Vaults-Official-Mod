@@ -37,6 +37,12 @@ public final class PouchMenu extends AbstractContainerMenu {
     private final PouchContents contents;
     private CompoundTag lastState;
     private String status = "";
+    private Feedback feedback = Feedback.NONE;
+    private int statusPreset = -1;
+    private int statusRevision;
+    private long statusReceivedAt;
+
+    public enum Feedback { NONE, SAVED, APPLIED, RENAMED, ERROR }
     private boolean storedView;
     private boolean locked;
     private boolean receivingSlotSync;
@@ -194,7 +200,8 @@ public final class PouchMenu extends AbstractContainerMenu {
         if (!stillValid(player) || isLocked() || player.level.isClientSide) {
             return false;
         }
-        status = "";
+        beginStatus(button >= SAVE_PRESET && button < APPLY_PRESET + PouchContents.PRESET_COUNT
+                ? button % PouchContents.PRESET_COUNT : -1);
         if (button >= TOGGLE_TRINKET && button < TOGGLE_TRINKET + PouchContents.SIZE) {
             int index = button - TOGGLE_TRINKET;
             List<Integer> active = new ArrayList<>(contents.activeIndices());
@@ -204,14 +211,14 @@ public final class PouchMenu extends AbstractContainerMenu {
             apply(active);
         } else if (button >= SAVE_PRESET && button < SAVE_PRESET + PouchContents.PRESET_COUNT) {
             contents.savePreset(button - SAVE_PRESET);
-            status = "Preset saved";
+            feedback = Feedback.SAVED;
         } else if (button >= APPLY_PRESET && button < APPLY_PRESET + PouchContents.PRESET_COUNT) {
             int preset = button - APPLY_PRESET;
             List<Integer> available = contents.resolvePreset(preset);
             apply(available);
             if (status.isEmpty()) {
-                int missing = contents.preset(preset).size() - available.size();
-                status = missing == 0 ? "Preset applied" : available.size() + " applied, " + missing + " missing";
+                contents.markPresetApplied(preset);
+                feedback = Feedback.APPLIED;
             }
         } else if (button == AUTO_REPLACE) {
             contents.toggleAutoReplace();
@@ -227,18 +234,29 @@ public final class PouchMenu extends AbstractContainerMenu {
         status = PouchRules.validate(pouch, contents, active, owner);
         if (status.isEmpty()) {
             contents.setActive(active);
+        } else {
+            feedback = Feedback.ERROR;
         }
+    }
+
+    private void beginStatus(int preset) {
+        status = "";
+        feedback = Feedback.NONE;
+        statusPreset = preset;
+        statusRevision++;
     }
 
     public boolean renamePreset(Player player, int preset, String name) {
         if (!stillValid(player) || isLocked() || player.level.isClientSide || preset < 0 || preset >= PouchContents.PRESET_COUNT) {
             return false;
         }
+        beginStatus(preset);
         try {
             contents.renamePreset(preset, name);
-            status = "Preset renamed";
+            feedback = Feedback.RENAMED;
         } catch (IllegalArgumentException exception) {
             status = exception.getMessage();
+            feedback = Feedback.ERROR;
         }
         broadcastChanges();
         return true;
@@ -282,6 +300,9 @@ public final class PouchMenu extends AbstractContainerMenu {
             CompoundTag state = contents.serializeNBT();
             state.putBoolean("Locked", PouchRules.locked(owner));
             state.putString("Status", status);
+            state.putInt("StatusPreset", statusPreset);
+            state.putInt("StatusRevision", statusRevision);
+            state.putInt("Feedback", feedback.ordinal());
             if (force || !state.equals(lastState)) {
                 lastState = state;
                 PouchNetwork.sendState(player, containerId, state);
@@ -296,12 +317,25 @@ public final class PouchMenu extends AbstractContainerMenu {
         contents.deserializeNBT(state);
         locked = state.getBoolean("Locked");
         status = state.getString("Status");
+        statusPreset = state.getInt("StatusPreset");
+        feedback = Feedback.values()[state.getInt("Feedback")];
+        int revision = state.getInt("StatusRevision");
+        if (revision != statusRevision) {
+            statusRevision = revision;
+            statusReceivedAt = System.nanoTime();
+        }
     }
 
     public PouchContents contents() { return contents; }
     public ItemStack pouch() { return pouch; }
     public boolean isEquipped() { return pouchSlot == EQUIPPED; }
     public String status() { return status; }
+    public Feedback feedback() { return feedback; }
+    public int statusPreset() { return statusPreset; }
+    public int statusRevision() { return statusRevision; }
+    public boolean hasRecentFeedback() {
+        return feedback != Feedback.NONE && System.nanoTime() - statusReceivedAt < 3_000_000_000L;
+    }
     public boolean isLocked() { return owner.level.isClientSide ? locked : PouchRules.locked(owner); }
     public boolean storedView() { return storedView; }
     public void setStoredView(boolean value) { storedView = value; }

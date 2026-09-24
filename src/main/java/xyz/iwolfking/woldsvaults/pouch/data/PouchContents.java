@@ -15,7 +15,7 @@ import net.minecraftforge.items.ItemStackHandler;
 /** Owns physical stacks and active slot indices; presets remember effect keys independently of storage. */
 public final class PouchContents extends ItemStackHandler {
     public static final int SIZE = 27;
-    public static final int SCHEMA = 3;
+    public static final int SCHEMA = 4;
     public static final int PRESET_COUNT = 3;
     public static final int MAX_PRESET_NAME_LENGTH = 24;
     private static final List<String> DEFAULT_PRESET_NAMES = List.of("Combat", "Looting", "Exploration");
@@ -23,6 +23,7 @@ public final class PouchContents extends ItemStackHandler {
     private final Set<Integer> active = new LinkedHashSet<>();
     private final List<Set<String>> presets = List.of(new LinkedHashSet<>(), new LinkedHashSet<>(), new LinkedHashSet<>());
     private boolean autoReplace;
+    private int appliedPreset = -1;
 
     public PouchContents() {
         super(SIZE);
@@ -67,7 +68,7 @@ public final class PouchContents extends ItemStackHandler {
     }
 
     private void forget(int slot) {
-        active.remove(slot);
+        if (active.remove(slot)) appliedPreset = -1;
     }
 
     public List<Integer> activeIndices() {
@@ -89,6 +90,7 @@ public final class PouchContents extends ItemStackHandler {
                 throw new IllegalArgumentException("Cannot activate an empty pouch slot: " + index);
             }
         }
+        if (appliedPreset >= 0 && !effectKeys(activeIndices()).equals(effectKeys(indices))) appliedPreset = -1;
         active.clear();
         active.addAll(indices);
     }
@@ -98,6 +100,25 @@ public final class PouchContents extends ItemStackHandler {
         for (ItemStack stack : activeStacks()) selection.add(validatedEffectKey(PouchRules.effectKey(stack)));
         presets.get(preset).clear();
         presets.get(preset).addAll(selection);
+        if (appliedPreset == preset && selection.isEmpty()) appliedPreset = -1;
+    }
+
+    private Set<String> effectKeys(List<Integer> indices) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (int index : indices) keys.add(PouchRules.effectKey(getStackInSlot(index)));
+        return keys;
+    }
+
+    public int appliedPreset() {
+        return appliedPreset;
+    }
+
+    public void markPresetApplied(int preset) {
+        Set<String> desired = presets.get(preset);
+        if (!desired.containsAll(effectKeys(activeIndices()))) {
+            throw new IllegalStateException("Applied trinkets must belong to the saved preset");
+        }
+        appliedPreset = desired.isEmpty() ? -1 : preset;
     }
 
     public List<String> preset(int preset) {
@@ -181,6 +202,7 @@ public final class PouchContents extends ItemStackHandler {
             result.putString("PresetName" + index, presetNames.get(index));
         }
         result.putBoolean("AutoReplace", autoReplace);
+        result.putInt("AppliedPreset", appliedPreset);
         return result;
     }
 
@@ -223,6 +245,22 @@ public final class PouchContents extends ItemStackHandler {
             decodedNames.add(tag.getInt("Schema") == 1 ? DEFAULT_PRESET_NAMES.get(index)
                     : validatedPresetName(tag.getString("PresetName" + index)));
         }
+        int decodedAppliedPreset = -1;
+        if (tag.getInt("Schema") >= 4) {
+            if (!tag.contains("AppliedPreset", Tag.TAG_INT)) throw new IllegalStateException("Missing applied pouch preset");
+            decodedAppliedPreset = tag.getInt("AppliedPreset");
+            if (decodedAppliedPreset < -1 || decodedAppliedPreset >= PRESET_COUNT) {
+                throw new IllegalStateException("Invalid applied pouch preset: " + decodedAppliedPreset);
+            }
+            if (decodedAppliedPreset >= 0) {
+                List<String> desired = decodedPresets.get(decodedAppliedPreset);
+                List<Integer> slots = new ArrayList<>(occupied);
+                if (desired.isEmpty() || decodedActive.stream().anyMatch(slot ->
+                        !desired.contains(PouchRules.effectKey(decoded.get(slots.indexOf(slot)))))) {
+                    throw new IllegalStateException("Applied pouch preset does not match its active trinket types");
+                }
+            }
+        }
         // Validate everything before replacing the live contents.
         for (int slot = 0; slot < SIZE; slot++) {
             stacks.set(slot, ItemStack.EMPTY);
@@ -230,7 +268,9 @@ public final class PouchContents extends ItemStackHandler {
         for (int index = 0; index < items.size(); index++) {
             stacks.set(items.getCompound(index).getInt("Slot"), decoded.get(index));
         }
+        appliedPreset = -1;
         setActive(decodedActive);
+        appliedPreset = decodedAppliedPreset;
         for (int index = 0; index < presets.size(); index++) {
             presets.get(index).clear();
             presets.get(index).addAll(decodedPresets.get(index));
