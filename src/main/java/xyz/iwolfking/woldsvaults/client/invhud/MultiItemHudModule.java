@@ -1,6 +1,7 @@
 package xyz.iwolfking.woldsvaults.client.invhud;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.systems.RenderSystem;
 import iskallia.vault.VaultMod;
 import iskallia.vault.client.render.HudPosition;
 import iskallia.vault.client.render.hud.InventoryHudHelper;
@@ -20,12 +21,15 @@ import iskallia.vault.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
+import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiComponent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.StringUtil;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import org.intellij.lang.annotations.Pattern;
@@ -34,6 +38,8 @@ import top.theillusivec4.curios.api.SlotResult;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchCapability;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
+import xyz.iwolfking.woldsvaults.pouch.data.PouchUseTotals;
+import xyz.iwolfking.woldsvaults.pouch.client.PouchUseDisplay;
 
 public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
     private final Supplier<List<ItemStack>> stackSupplier;
@@ -58,13 +64,14 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
             InventoryHudElementOptions opts = this.option.getValue();
             var idx = 0;
             for (var stack : this.stackSupplier.get()) {
-                renderStack(stack, editing, opts, poseStack, idx);
+                renderStack(stack, editing, opts, poseStack, idx, PouchUseDisplay.equippedUses(player, stack));
                 idx++;
             }
         }
     }
 
-    private void renderStack(ItemStack stack, boolean editing, InventoryHudElementOptions opts, PoseStack poseStack, int idx) {
+    private void renderStack(ItemStack stack, boolean editing, InventoryHudElementOptions opts, PoseStack poseStack, int idx,
+            @Nullable PouchUseTotals pooledUses) {
         int yOff = 18 * idx;
         if (opts.getHudPosition().getScreenAnchor().getVertical() == Alignment.Vertical.TOP) {
             yOff *= 1;
@@ -92,6 +99,9 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
             if (stack.getItem() instanceof IVaultUsesItem item && VaultUsesHelper.getUses(stack) > 0 && !VaultUsesHelper.getUsedVaults(stack).isEmpty()) {
                 durability = (float)(VaultUsesHelper.getUses(stack) - VaultUsesHelper.getUsedVaults(stack).size()) / VaultUsesHelper.getUses(stack);
             }
+            if (pooledUses != null) {
+                durability = pooledUses.fraction();
+            }
             boolean render = switch (opts.getDisplayMode()) {
                 case ALWAYS -> true;
                 case NEVER -> editing;
@@ -102,14 +112,14 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
                 if ((!editing || !stack.isEmpty()) && !opts.isUseOverlay()) {
                     InventoryHudHelper.renderScaledGuiItem(poseStack, stack, xOff, yOff, false);
                     if (opts.getIndicator().equals(InventoryHudElementOptions.Indicator.BAR)) {
-                        InventoryHudHelper.renderUsesBar(poseStack, stack, xOff, yOff, 1.0F);
+                        renderUsesBar(poseStack, stack, xOff, yOff, pooledUses);
                     }
                 } else {
                     ResourceLocation baseTexture = this.getBaseTexture();
                     ResourceLocation overlayTexture = this.getOverlayTexture();
                     InventoryHudHelper.renderOverlayItem(poseStack, this.key(), xOff, yOff, durability, 1.0F, baseTexture, overlayTexture);
                     if (opts.getIndicator().equals(InventoryHudElementOptions.Indicator.BAR) && (!editing || !stack.isEmpty())) {
-                        InventoryHudHelper.renderUsesBar(poseStack, stack, xOff, yOff, 1.0F);
+                        renderUsesBar(poseStack, stack, xOff, yOff, pooledUses);
                     }
                 }
 
@@ -132,8 +142,7 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
 
                     String text = percent + "%";
                     if (opts.getIndicator().equals(InventoryHudElementOptions.Indicator.NUMBER) && this.isUsesItem(stack)) {
-                        text = String.valueOf(((IVaultUsesItem) stack.getItem()).getUses(stack) - ((IVaultUsesItem) stack.getItem()).getUsedVaults(
-                            stack).size());
+                        text = String.valueOf(pooledUses == null ? PouchRules.remainingUses(stack) : pooledUses.remaining());
                     }
 
                     if (stack.getItem() instanceof VaultGearItem item && item.isBroken(stack)) {
@@ -170,6 +179,20 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
                 }
             }
         }
+    }
+
+    private static void renderUsesBar(PoseStack pose, ItemStack stack, int x, int y, @Nullable PouchUseTotals pooledUses) {
+        if (pooledUses == null) {
+            InventoryHudHelper.renderUsesBar(pose, stack, x, y, 1.0F);
+            return;
+        }
+        float fraction = pooledUses.fraction();
+        int width = Math.round(13 * fraction);
+        int color = 0xFF000000 | Mth.hsvToRgb(fraction / 3.0F, 1.0F, 1.0F);
+        RenderSystem.disableDepthTest();
+        GuiComponent.fill(pose, x + 2, y + 13, x + 15, y + 15, 0xFF000000);
+        GuiComponent.fill(pose, x + 2, y + 13, x + 2 + width, y + 14, color);
+        RenderSystem.enableDepthTest();
     }
 
     @Override

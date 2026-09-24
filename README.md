@@ -12,6 +12,9 @@ Collection hover text shows the name and available action; descriptions and uses
 appear in the details panel. Storage and Presets include compact detail tooltips.
 The inventory HUD shows selected pouch trinkets in their existing colour groups,
 with the configured icons and remaining-use indicators. Stored reserves stay hidden.
+With auto-replace enabled, the collection details and HUD combine remaining uses
+across matching copies in the pouch. Storage tooltips still describe each individual
+copy. Collection icons omit copy counts and durability bars.
 
 Pouch editing and automatic replacement are locked from vault registration until
 the player has left the vault. Exhausted trinkets can be replaced afterward.

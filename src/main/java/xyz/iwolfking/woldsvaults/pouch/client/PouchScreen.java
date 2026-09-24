@@ -456,7 +456,6 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 }
                 if (selected) check(pose, x + 1, y + 12);
                 RenderSystem.enableDepthTest();
-                if (entry.indices().size() > 1) itemRenderer.renderGuiItemDecorations(font, entry.icon(), x + 2, y + 2, String.valueOf(entry.indices().size()));
             }
         } else if (view == View.STORAGE) {
             for (Slot slot : menu.slots) {
@@ -541,7 +540,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         int usesY = descriptionY + Math.min(5, font.split(description, 84).size()) * 10 + 6;
         int chosen = chosenIndex(inspected);
         if (chosen >= 0) {
-            font.draw(pose, fit(label("uses", PouchRules.remainingUses(menu.contents().getStackInSlot(chosen))).getString(), 84),
+            font.draw(pose, fit(label("uses", PouchUseDisplay.remainingUses(menu.contents(), menu.contents().getStackInSlot(chosen))).getString(), 84),
                     190, usesY, TEXT);
         }
         boolean active = chosen >= 0 && menu.contents().isActive(chosen);

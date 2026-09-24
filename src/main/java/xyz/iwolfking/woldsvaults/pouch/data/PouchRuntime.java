@@ -40,14 +40,24 @@ public final class PouchRuntime {
 
     public static synchronized void update(Player player) {
         ItemStack pouch = PouchRules.equipped(player);
-        Map<ItemStack, WornEntry> next = new IdentityHashMap<>();
         Map<ItemStack, WornEntry> previous = WORN.getOrDefault(player, Map.of());
+        if (previous.isEmpty() && (!player.isAlive() || !PouchRules.isPouch(pouch))) {
+            return;
+        }
+        Map<ItemStack, WornEntry> next = new IdentityHashMap<>();
         if (player.isAlive() && PouchRules.isPouch(pouch)) {
             PouchContents contents = PouchCapability.get(pouch);
-            if (!player.level.isClientSide && !PouchRules.locked(player)) {
-                replaceExhausted(pouch, contents, player);
+            List<Integer> requested = contents.activeIndices();
+            List<Integer> selected = PouchRules.validSelection(pouch, contents, requested);
+            if (!player.level.isClientSide) {
+                if (!selected.equals(requested)) {
+                    contents.setActive(selected);
+                }
+                if (contents.autoReplace() && !selected.isEmpty() && !PouchRules.locked(player)) {
+                    selected = replaceExhausted(pouch, contents, player, selected);
+                }
             }
-            for (int index : PouchRules.validSelection(pouch, contents, contents.activeIndices())) {
+            for (int index : selected) {
                 ItemStack stack = contents.getStackInSlot(index);
                 WornEntry entry = previous.get(stack);
                 next.put(stack, entry == null ? new WornEntry(stack.copy(), index) : entry);
@@ -83,11 +93,8 @@ public final class PouchRuntime {
         }
     }
 
-    private static void replaceExhausted(ItemStack pouch, PouchContents contents, Player player) {
-        if (!contents.autoReplace()) {
-            return;
-        }
-        List<Integer> replacement = new ArrayList<>(contents.activeIndices());
+    private static List<Integer> replaceExhausted(ItemStack pouch, PouchContents contents, Player player, List<Integer> selected) {
+        List<Integer> replacement = selected;
         for (int position = 0; position < replacement.size(); position++) {
             ItemStack exhausted = contents.getStackInSlot(replacement.get(position));
             if (PouchRules.remainingUses(exhausted) > 0) {
@@ -107,6 +114,9 @@ public final class PouchRuntime {
                 }
             }
         }
-        contents.setActive(replacement);
+        if (replacement != selected) {
+            contents.setActive(replacement);
+        }
+        return replacement;
     }
 }

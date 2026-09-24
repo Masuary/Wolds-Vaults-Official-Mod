@@ -22,6 +22,11 @@ public final class PouchClientEvents {
     private PouchClientEvents() {}
 
     @SubscribeEvent
+    public static void renderTick(TickEvent.RenderTickEvent event) {
+        PouchUseDisplay.clearFrame();
+    }
+
+    @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
             return;

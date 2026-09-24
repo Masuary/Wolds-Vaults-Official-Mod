@@ -20,17 +20,22 @@ public abstract class MixinPouchTrinketEffects {
     @Inject(method = "getTrinkets(Ljava/util/Map;Ljava/lang/Class;)Ljava/util/List;", at = @At("RETURN"), cancellable = true)
     private static <T extends TrinketEffect<?>> void collectionEffects(Map<String, List<Tuple<ItemStack, Integer>>> slots,
             Class<? super T> effectClass, CallbackInfoReturnable<List<TrinketHelper.TrinketStack<T>>> callback) {
-        List<TrinketHelper.TrinketStack<T>> result = new ArrayList<>(callback.getReturnValue());
+        List<TrinketHelper.TrinketStack<T>> result = null;
         for (Tuple<ItemStack, Integer> entry : slots.getOrDefault("trinket_pouch", List.of())) {
             if (entry.getB() == 0 && PouchRules.isPouch(entry.getA())) {
                 PouchContents contents = PouchCapability.get(entry.getA());
                 for (int index : PouchRules.validSelection(entry.getA(), contents, contents.activeIndices())) {
+                    if (result == null) {
+                        result = new ArrayList<>(callback.getReturnValue());
+                    }
                     ItemStack stack = contents.getStackInSlot(index);
                     // Only effect enumeration expands. Inventory/death enumeration still sees one pouch.
                     result.addAll(TrinketHelper.getTrinkets(Map.of(PouchRules.color(stack), List.of(new Tuple<>(stack, index))), effectClass));
                 }
             }
         }
-        callback.setReturnValue(result);
+        if (result != null) {
+            callback.setReturnValue(result);
+        }
     }
 }

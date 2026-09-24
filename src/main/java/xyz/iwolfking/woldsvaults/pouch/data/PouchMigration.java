@@ -17,6 +17,7 @@ import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
 
 public final class PouchMigration {
     private static final ThreadLocal<Boolean> RESTORING = ThreadLocal.withInitial(() -> false);
+    private static final UUID LEGACY_POUCH_MODIFIER = UUID.nameUUIDFromBytes("trinket_pouch0".getBytes(StandardCharsets.UTF_8));
 
     private PouchMigration() {}
 
@@ -82,14 +83,13 @@ public final class PouchMigration {
             active.add(slot);
         }
         contents.setActive(PouchRules.validSelection(pouch, contents, active));
-        UUID pouchModifier = UUID.nameUUIDFromBytes("trinket_pouch0".getBytes(StandardCharsets.UTF_8));
         for (CompoundTag handler : coloredHandlers) {
             handler.getCompound("Stacks").put("Items", new ListTag());
             for (String key : List.of("CachedModifiers", "PersistentModifiers")) {
                 ListTag modifiers = handler.getList(key, Tag.TAG_COMPOUND);
                 for (int index = modifiers.size() - 1; index >= 0; index--) {
                     CompoundTag modifier = modifiers.getCompound(index);
-                    if (modifier.hasUUID("UUID") && modifier.getUUID("UUID").equals(pouchModifier)) {
+                    if (modifier.hasUUID("UUID") && modifier.getUUID("UUID").equals(LEGACY_POUCH_MODIFIER)) {
                         modifiers.remove(index);
                     }
                 }
@@ -153,21 +153,22 @@ public final class PouchMigration {
                     }
                 });
             }
-            requireSpace(contents, pending.size());
-            List<Integer> active = new ArrayList<>(contents.activeIndices());
-            for (LegacySlot legacy : pending) {
-                // Move the original object only after every source item and capacity was validated.
-                int slot = contents.firstEmpty();
-                contents.setStackInSlot(slot, legacy.stack());
-                legacy.handler().setStackInSlot(legacy.index(), ItemStack.EMPTY);
-                active.add(slot);
+            if (!pending.isEmpty()) {
+                requireSpace(contents, pending.size());
+                List<Integer> active = new ArrayList<>(contents.activeIndices());
+                for (LegacySlot legacy : pending) {
+                    // Move the original object only after every source item and capacity was validated.
+                    int slot = contents.firstEmpty();
+                    contents.setStackInSlot(slot, legacy.stack());
+                    legacy.handler().setStackInSlot(legacy.index(), ItemStack.EMPTY);
+                    active.add(slot);
+                }
+                contents.setActive(PouchRules.validSelection(pouch, contents, active));
             }
-            contents.setActive(PouchRules.validSelection(pouch, contents, active));
-            UUID pouchModifier = UUID.nameUUIDFromBytes("trinket_pouch0".getBytes(StandardCharsets.UTF_8));
             Multimap<String, AttributeModifier> obsolete = HashMultimap.create();
             for (String color : PouchRules.COLORS) {
                 for (AttributeModifier modifier : handler.getModifiers().get(color)) {
-                    if (modifier.getId().equals(pouchModifier)) {
+                    if (modifier.getId().equals(LEGACY_POUCH_MODIFIER)) {
                         obsolete.put(color, modifier);
                     }
                 }

@@ -76,30 +76,11 @@ public final class PouchRules {
     }
 
     public static String validate(ItemStack pouch, PouchContents contents, List<Integer> indices, Player player) {
-        Map<String, Integer> counts = new HashMap<>();
-        Set<TrinketEffect<?>> effects = new HashSet<>();
+        SelectionValidator validator = new SelectionValidator(pouch, contents, player);
         for (int index : indices) {
-            if (index < 0 || index >= PouchContents.SIZE) {
-                return "Invalid stored item";
-            }
-            ItemStack stack = contents.getStackInSlot(index);
-            String color = color(stack);
-            if (!isTrinket(stack)) {
-                return "Only identified colored trinkets can be activated";
-            }
-            if (player != null && !contents.isActive(index) && remainingUses(stack) == 0) {
-                return "This trinket has no remaining uses";
-            }
-            if (counts.merge(color, 1, Integer::sum) > capacities(pouch).getOrDefault(color, 0)) {
-                return "No free " + color.replace("_trinket", "") + " capacity in this pouch";
-            }
-            for (TrinketHelper.TrinketStack<TrinketEffect<?>> effect : effects(stack)) {
-                if (!effects.add(effect.trinket())) {
-                    return "This effect is already active";
-                }
-            }
-            if (player != null && !((ICurioItem) stack.getItem()).canEquip(context(player, stack, index), stack)) {
-                return "This trinket cannot be equipped right now";
+            String error = validator.accept(index);
+            if (!error.isEmpty()) {
+                return error;
             }
         }
         return "";
@@ -107,13 +88,57 @@ public final class PouchRules {
 
     public static List<Integer> validSelection(ItemStack pouch, PouchContents contents, List<Integer> requested) {
         List<Integer> accepted = new ArrayList<>();
+        SelectionValidator validator = new SelectionValidator(pouch, contents, null);
         for (int index : requested) {
-            List<Integer> candidate = new ArrayList<>(accepted);
-            candidate.add(index);
-            if (validate(pouch, contents, candidate, null).isEmpty()) {
+            if (validator.accept(index).isEmpty()) {
                 accepted.add(index);
             }
         }
         return accepted;
+    }
+
+    private static final class SelectionValidator {
+        private final PouchContents contents;
+        private final Player player;
+        private final Map<String, Integer> capacities;
+        private final Map<String, Integer> counts = new HashMap<>();
+        private final Set<TrinketEffect<?>> effects = new HashSet<>();
+
+        private SelectionValidator(ItemStack pouch, PouchContents contents, Player player) {
+            this.contents = contents;
+            this.player = player;
+            this.capacities = capacities(pouch);
+        }
+
+        private String accept(int index) {
+            if (index < 0 || index >= PouchContents.SIZE) {
+                return "Invalid stored item";
+            }
+            ItemStack stack = contents.getStackInSlot(index);
+            String color = color(stack);
+            if (!isStoredItem(stack) || !TrinketItem.isIdentified(stack) || !COLORS.contains(color)) {
+                return "Only identified colored trinkets can be activated";
+            }
+            if (player != null && !contents.isActive(index) && remainingUses(stack) == 0) {
+                return "This trinket has no remaining uses";
+            }
+            int count = counts.getOrDefault(color, 0) + 1;
+            if (count > capacities.getOrDefault(color, 0)) {
+                return "No free " + color.replace("_trinket", "") + " capacity in this pouch";
+            }
+            Set<TrinketEffect<?>> candidateEffects = new HashSet<>();
+            for (TrinketHelper.TrinketStack<TrinketEffect<?>> effect : effects(stack)) {
+                if (effects.contains(effect.trinket()) || !candidateEffects.add(effect.trinket())) {
+                    return "This effect is already active";
+                }
+            }
+            if (player != null && !((ICurioItem) stack.getItem()).canEquip(context(player, stack, index), stack)) {
+                return "This trinket cannot be equipped right now";
+            }
+            // A rejected candidate must not consume capacity or block later candidates' effects.
+            counts.put(color, count);
+            effects.addAll(candidateEffects);
+            return "";
+        }
     }
 }
