@@ -367,6 +367,10 @@ public class ModLanguageProvider extends LanguageProvider {
         add("gui.woldsvaults.pouch.description.the_vault.the_dice", "Hits deal %s%% to %s%% damage.");
         add("gui.woldsvaults.pouch.description.the_vault.immortal_seal", "%s%% on hit: %ss Immortality.");
         add("gui.woldsvaults.pouch.description.the_vault.weighted_boots", "Set a movement speed limit.");
+        add("gui.woldsvaults.pouch.speed_limit", "Limit: %s");
+        add("gui.woldsvaults.pouch.speed_uncapped", "Uncapped");
+        add("gui.woldsvaults.pouch.speed_configure", "Press %s to configure.");
+        add("gui.woldsvaults.pouch.speed_bind_key", "Bind Configure Trinket in Controls.");
         add("gui.woldsvaults.pouch.slots_full", "%s slots full");
         add("gui.woldsvaults.pouch.effect_active", "Effect already active");
         add("gui.woldsvaults.pouch.cannot_equip", "Cannot equip now");

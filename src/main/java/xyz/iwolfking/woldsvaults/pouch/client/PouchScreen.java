@@ -298,6 +298,22 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         })).orElse(-1);
     }
 
+    public Slot trinketConfigurationSlot() {
+        if (minecraft == null || dialog != Dialog.NONE || !menu.getCarried().isEmpty()
+                || search.visible && search.isFocused()) {
+            return null;
+        }
+        if (view == View.STORAGE) {
+            return keyboardNavigation ? null : getSlotUnderMouse();
+        }
+        int mouseX = (int) (minecraft.mouseHandler.xpos() * width / minecraft.getWindow().getScreenWidth());
+        int mouseY = (int) (minecraft.mouseHandler.ypos() * height / minecraft.getWindow().getScreenHeight());
+        int cell = collectionInspectedCell(mouseX, mouseY);
+        Entry inspected = cell >= 0 ? entry(cell) : null;
+        int storedIndex = inspected == null ? -1 : chosenIndex(inspected);
+        return storedIndex >= 0 ? menu.getSlot(storedIndex) : null;
+    }
+
     private void updateControls() {
         boolean modal = dialog != Dialog.NONE;
         boolean collection = view == View.COLLECTION;
@@ -418,8 +434,9 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             pose.popPose();
             return;
         }
-        renderTooltip(pose, mouseX, mouseY);
-        renderHints(pose, mouseX, mouseY);
+        if (!renderHints(pose, mouseX, mouseY) && !keyboardNavigation) {
+            renderTooltip(pose, mouseX, mouseY);
+        }
     }
 
     private void removeOverlappingExternalControls() {
@@ -491,7 +508,6 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 if (entry.missing()) {
                     RenderSystem.disableDepthTest();
                     fill(pose, x + 2, y + 2, x + 18, y + 18, 0xAA8B8B8B);
-                    font.drawShadow(pose, "!", x + 14, y + 10, 0xFF7777);
                     RenderSystem.enableDepthTest();
                 }
             }
@@ -612,12 +628,13 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         }
 
         Component name = inspected.icon().getHoverName();
-        Component description = PouchDescriptions.describe(inspected.icon());
+        int chosen = chosenIndex(inspected);
+        ItemStack inspectedStack = chosen >= 0 ? menu.contents().getStackInSlot(chosen) : inspected.icon();
+        Component description = PouchDescriptions.describe(inspectedStack, chosen >= 0);
         int descriptionY = 58 + Math.min(2, font.split(name, 84).size()) * 10 + 4;
         drawWrapped(pose, name, 190, 58, 84, 2, TEXT);
         drawWrapped(pose, description, 190, descriptionY, 84, 5, MUTED);
         int usesY = descriptionY + Math.min(5, font.split(description, 84).size()) * 10 + 6;
-        int chosen = chosenIndex(inspected);
         if (chosen >= 0) {
             font.draw(pose, fit(label("uses", PouchUseDisplay.remainingUses(menu.contents(), menu.contents().getStackInSlot(chosen))).getString(), 84),
                     190, usesY, TEXT);
@@ -654,7 +671,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         if (lines.size() > rows) font.draw(pose, "...", x, y + (rows - 1) * 10, color);
     }
 
-    private void renderHints(PoseStack pose, int mouseX, int mouseY) {
+    private boolean renderHints(PoseStack pose, int mouseX, int mouseY) {
         if (view == View.COLLECTION) {
             int index = collectionInspectedCell(mouseX, mouseY);
             if (index >= 0) {
@@ -669,33 +686,49 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 Component action = blocked.getString().isEmpty()
                         ? label(menu.contents().isActive(chosen) ? "deactivate" : "activate").copy().withStyle(ChatFormatting.YELLOW)
                         : blocked.copy().withStyle(ChatFormatting.RED);
-                tooltip(pose, mouseX, mouseY, entry.icon().getHoverName(), action);
-                return;
+                tooltip(pose, mouseX, mouseY, index % PouchLayout.COLUMN_COUNT >= PouchLayout.COLUMN_COUNT / 2,
+                        entry.icon().getHoverName(), action);
+                return true;
             }
-            if (ownership.isHoveredOrFocused()) tooltip(pose, mouseX, mouseY, ownedOnly ? label("show_catalog").getString() : label("show_owned").getString());
+            if (isHintTarget(ownership, mouseX, mouseY)) {
+                tooltip(pose, mouseX, mouseY, ownedOnly ? label("show_catalog").getString() : label("show_owned").getString());
+                return true;
+            }
         }
         if (view == View.STORAGE) {
             for (int index = 0; index < presetSelectors.size(); index++) {
-                if (presetSelectors.get(index).isHoveredOrFocused()) {
+                if (isHintTarget(presetSelectors.get(index), mouseX, mouseY)) {
                     tooltip(pose, mouseX, mouseY, text(menu.contents().presetName(index)), presetState(index), label("preview_hint"));
-                    return;
+                    return true;
                 }
             }
             for (int cell = 0; cell < PouchLayout.PREVIEW_COLUMNS * PouchLayout.PREVIEW_ROWS; cell++) {
                 PresetEntry entry = presetEntry(cell);
-                if (entry != null && inside(mouseX, mouseY, previewX(cell), previewY(cell), 20, 20)) {
+                if (entry != null && isMouseHintInside(mouseX, mouseY, previewX(cell), previewY(cell), 20, 20)) {
                     if (entry.missing()) tooltip(pose, mouseX, mouseY, entry.icon().getHoverName(),
                             label("preset_missing").copy().withStyle(ChatFormatting.RED));
                     else renderCompactTrinketTooltip(pose, entry.icon(), mouseX, mouseY);
-                    return;
+                    return true;
                 }
             }
-            if (renamePreset.isHoveredOrFocused()) tooltip(pose, mouseX, mouseY, label("rename_hint").getString());
-            if (savePreset.isHoveredOrFocused()) tooltip(pose, mouseX, mouseY, label("save_hint").getString());
-            if (applyPreset.isHoveredOrFocused()) tooltip(pose, mouseX, mouseY, label("apply_hint").getString());
+            if (isHintTarget(renamePreset, mouseX, mouseY)) {
+                tooltip(pose, mouseX, mouseY, label("rename_hint").getString());
+                return true;
+            }
+            if (isHintTarget(savePreset, mouseX, mouseY)) {
+                tooltip(pose, mouseX, mouseY, label("save_hint").getString());
+                return true;
+            }
+            if (isHintTarget(applyPreset, mouseX, mouseY)) {
+                tooltip(pose, mouseX, mouseY, label("apply_hint").getString());
+                return true;
+            }
 
-            if (inside(mouseX, mouseY, 183, 51, 92, 10)) tooltip(pose, mouseX, mouseY, menu.contents().presetName(selectedPreset));
-            if (inside(mouseX, mouseY, 183, 111, 92, 13)) {
+            if (isMouseHintInside(mouseX, mouseY, 183, 51, 92, 10)) {
+                tooltip(pose, mouseX, mouseY, menu.contents().presetName(selectedPreset));
+                return true;
+            }
+            if (isMouseHintInside(mouseX, mouseY, 183, 111, 92, 13)) {
                 List<Component> lines = new ArrayList<>();
                 lines.add(presetState(selectedPreset));
                 List<String> desired = menu.contents().preset(selectedPreset);
@@ -706,26 +739,39 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 lines.add(applied < 0 ? label("preset_custom") : label("preset_current", menu.contents().presetName(applied)));
                 if (feedbackVisible() && menu.feedback() == PouchMenu.Feedback.ERROR) lines.add(text(menu.status()).copy().withStyle(ChatFormatting.RED));
                 tooltip(pose, mouseX, mouseY, lines.toArray(Component[]::new));
+                return true;
             }
         }
         for (int index = 0; index < scrollBars.size(); index++) {
             PouchScrollBar bar = scrollBars.get(index);
-            if (bar.visible && bar.isHoveredOrFocused()) {
+            if (bar.visible && isHintTarget(bar, mouseX, mouseY)) {
                 PouchGridScroll scroll = index == 0 ? collectionScroll : presetScroll;
                 tooltip(pose, mouseX, mouseY, label("scroll_hint").getString(), label("scroll_row", scroll.firstRow() + 1, scroll.totalRows()).getString());
+                return true;
             }
         }
         for (Button tab : tabs) {
-            if (tab.isHoveredOrFocused()) {
+            if (isHintTarget(tab, mouseX, mouseY)) {
                 tooltip(pose, mouseX, mouseY, tab.getMessage());
-                return;
+                return true;
             }
         }
-        if (autoReplace.isHoveredOrFocused() || inside(mouseX, mouseY, 26, PouchLayout.FOOTER_Y, 175, 14)) {
+        if (isHintTarget(autoReplace, mouseX, mouseY) || isMouseHintInside(mouseX, mouseY, 26, PouchLayout.FOOTER_Y, 175, 14)) {
             tooltip(pose, mouseX, mouseY, label(menu.isLocked() ? "locked_hint" : "auto_replace_hint"));
-        } else if ((menu.isLocked() || !menu.isEquipped()) && inside(mouseX, mouseY, 204, PouchLayout.FOOTER_Y, 76, 14)) {
+            return true;
+        } else if ((menu.isLocked() || !menu.isEquipped()) && isMouseHintInside(mouseX, mouseY, 204, PouchLayout.FOOTER_Y, 76, 14)) {
             tooltip(pose, mouseX, mouseY, label(menu.isLocked() ? "locked_hint" : "unequipped_hint"));
+            return true;
         }
+        return false;
+    }
+
+    private boolean isHintTarget(AbstractWidget widget, int mouseX, int mouseY) {
+        return widget.visible && (keyboardNavigation ? widget.isFocused() : widget.isMouseOver(mouseX, mouseY));
+    }
+
+    private boolean isMouseHintInside(int mouseX, int mouseY, int x, int y, int width, int height) {
+        return !keyboardNavigation && inside(mouseX, mouseY, x, y, width, height);
     }
 
     private void tooltip(PoseStack pose, int mouseX, int mouseY, String... lines) {
@@ -737,14 +783,21 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     }
 
     private void tooltip(PoseStack pose, int mouseX, int mouseY, Component... lines) {
+        tooltip(pose, mouseX, mouseY, false, lines);
+    }
+
+    private void tooltip(PoseStack pose, int mouseX, int mouseY, boolean leftOfCursor, Component... lines) {
+        int wrapWidth = leftOfCursor ? Math.max(1, Math.min(220, mouseX - 36))
+                : Math.max(80, Math.min(220, width - 30));
         List<FormattedCharSequence> wrapped = new ArrayList<>();
         for (Component line : lines) {
             if (line.getString().isBlank()) wrapped.add(FormattedCharSequence.EMPTY);
-            else wrapped.addAll(font.split(line, Math.max(80, Math.min(220, width - 30))));
+            else wrapped.addAll(font.split(line, wrapWidth));
         }
         int tooltipWidth = Math.max(48, wrapped.stream().mapToInt(font::width).max().orElse(0));
         // Legendary Tooltips pads centered titles after measurement. Reserve that space plus the native border.
-        int anchorX = Math.max(0, Math.min(mouseX, width - tooltipWidth - 32));
+        int anchorX = leftOfCursor ? Math.max(0, mouseX - tooltipWidth - 32)
+                : Math.max(0, Math.min(mouseX, width - tooltipWidth - 32));
         int anchorY = Math.max(16, Math.min(mouseY, height - 4));
         renderTooltip(pose, wrapped, anchorX, anchorY);
     }

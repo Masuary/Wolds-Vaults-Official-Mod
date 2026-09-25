@@ -19,7 +19,9 @@ import net.minecraft.network.chat.TextComponent;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.world.item.ItemStack;
 import xyz.iwolfking.woldsvaults.api.lib.trinket.MultiAttributeTrinket;
+import xyz.iwolfking.woldsvaults.client.init.ModKeybinds;
 import xyz.iwolfking.woldsvaults.effect.trinkets.EffectOnHitTakenEffect;
+import xyz.iwolfking.woldsvaults.effect.trinkets.SpeedLimitTrinketEffect;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
 
 /** Pouch-only summaries, using the synced effect config for variable values. */
@@ -27,9 +29,26 @@ public final class PouchDescriptions {
     private PouchDescriptions() {}
 
     public static Component describe(ItemStack stack) {
+        return describe(stack, true);
+    }
+
+    public static Component describe(ItemStack stack, boolean includeStackSettings) {
         return new TextComponent(PouchRules.effects(stack).stream()
-                .map(entry -> describe(entry.trinket()).getString()).filter(value -> !value.isBlank())
+                .map(entry -> entry.trinket() instanceof SpeedLimitTrinketEffect && includeStackSettings
+                        ? speedLimitDescription(stack).getString() : describe(entry.trinket()).getString())
+                .filter(value -> !value.isBlank())
                 .distinct().reduce((first, second) -> first + "\n" + second).orElse(""));
+    }
+
+    private static Component speedLimitDescription(ItemStack stack) {
+        int capPercent = SpeedLimitTrinketEffect.getCapPercent(stack);
+        Component limit = capPercent == 0 ? new TranslatableComponent("gui.woldsvaults.pouch.speed_uncapped")
+                : new TextComponent(capPercent + "%");
+        Component instruction = ModKeybinds.configureTrinket.isUnbound()
+                ? new TranslatableComponent("gui.woldsvaults.pouch.speed_bind_key")
+                : new TranslatableComponent("gui.woldsvaults.pouch.speed_configure",
+                        ModKeybinds.configureTrinket.getTranslatedKeyMessage());
+        return new TranslatableComponent("gui.woldsvaults.pouch.speed_limit", limit).append("\n").append(instruction);
     }
 
     private static Component describe(TrinketEffect<?> effect) {

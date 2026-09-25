@@ -26,6 +26,7 @@ import xyz.iwolfking.woldsvaults.integration.bettercombat.BetterCombatToggleHelp
 import xyz.iwolfking.woldsvaults.client.init.ModKeybinds;
 import xyz.iwolfking.woldsvaults.client.screens.SpeedCapConfigScreen;
 import xyz.iwolfking.woldsvaults.effect.trinkets.SpeedLimitTrinketEffect;
+import xyz.iwolfking.woldsvaults.pouch.client.PouchScreen;
 
 @Mod.EventBusSubscriber(modid = WoldsVaults.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class KeyInputEvents {
@@ -72,7 +73,8 @@ public class KeyInputEvents {
         if (!ModKeybinds.configureTrinket.isActiveAndMatches(pressedKey)) {
             return;
         }
-        Slot hovered = containerScreen.getSlotUnderMouse();
+        Slot hovered = containerScreen instanceof PouchScreen pouchScreen
+                ? pouchScreen.trinketConfigurationSlot() : containerScreen.getSlotUnderMouse();
         if (hovered == null || !hovered.hasItem()) {
             return;
         }

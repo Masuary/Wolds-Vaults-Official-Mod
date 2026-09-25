@@ -24,6 +24,10 @@ with the configured icons and remaining-use indicators. Stored reserves stay hid
 With auto-replace enabled, the collection details and HUD combine remaining uses
 across matching copies in the pouch. Storage tooltips still describe each individual
 copy. Collection icons omit copy counts and durability bars.
+Mouse hover takes over tooltip focus after keyboard navigation, with one tooltip
+shown at a time. Weighted Boots descriptions show the stored copy's speed limit
+and the configured key for editing it while hovered or keyboard-focused in Trinkets.
+Storage also supports configuring individual copies.
 
 Pouch editing and automatic replacement are locked from vault registration until
 the player has left the vault. Exhausted trinkets can be replaced afterward.
