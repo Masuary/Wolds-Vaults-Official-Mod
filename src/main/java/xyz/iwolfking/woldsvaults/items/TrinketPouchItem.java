@@ -28,6 +28,7 @@ import xyz.iwolfking.woldsvaults.pouch.menu.PouchMenu;
 import org.jetbrains.annotations.NotNull;
 import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.SlotContext;
+import top.theillusivec4.curios.api.SlotResult;
 import top.theillusivec4.curios.api.type.capability.ICurioItem;
 import xyz.iwolfking.woldsvaults.WoldsVaults;
 import xyz.iwolfking.woldsvaults.config.TrinketPouchConfig;
@@ -52,11 +53,16 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
         if (PouchMigration.restoring()) {
             return true;
         }
+        ItemStack equippedStack = CuriosApi.getCuriosHelper().findCurio(context.entity(), "trinket_pouch", 0)
+                .map(SlotResult::stack).orElse(ItemStack.EMPTY);
+        // Curios re-validates equipped curios after every resource reload and ejects any that fail.
+        if (equippedStack == stack) {
+            return true;
+        }
         if (context.entity() instanceof Player player && PouchRules.locked(player)) {
             return false;
         }
-        return CuriosApi.getCuriosHelper().findCurio(context.entity(), "trinket_pouch", 0)
-                .map(slot -> slot.stack().isEmpty()).orElse(true);
+        return equippedStack.isEmpty();
     }
 
     @Override
