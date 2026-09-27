@@ -167,8 +167,8 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 }
             }));
         }
-        renamePreset = button(228, 149, 47, 16, "rename", ignored -> openDialog(Dialog.RENAME, selectedPreset));
-        savePreset = button(182, 149, 43, 16, "save", ignored -> {
+        renamePreset = button(226, 149, 49, 16, "rename", ignored -> openDialog(Dialog.RENAME, selectedPreset));
+        savePreset = button(182, 149, 41, 16, "save", ignored -> {
             if (menu.contents().preset(selectedPreset).isEmpty()) action(PouchMenu.SAVE_PRESET + selectedPreset);
             else openDialog(Dialog.OVERWRITE, selectedPreset);
         });
@@ -199,7 +199,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 smallButton(pose, this.x, this.y, this.width, height, active && isHoveredOrFocused());
                 if (this == autoReplace) {
                     if (menu.contents().autoReplace()) {
-                        drawCheckboxCross(pose, this.x + (width - 6) / 2, this.y + (height - 6) / 2,
+                        drawCheckboxTick(pose, this.x + (width - 8) / 2, this.y + (height - 7) / 2,
                                 active ? 0xFFFFFFFF : 0xFFAAAAAA);
                     }
                     return;
@@ -951,11 +951,9 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         }
     }
 
-    private static void drawCheckboxCross(PoseStack pose, int x, int y, int color) {
-        for (int pixel = 0; pixel < 6; pixel++) {
-            fill(pose, x + pixel, y + pixel, x + pixel + 1, y + pixel + 1, color);
-            fill(pose, x + 5 - pixel, y + pixel, x + 6 - pixel, y + pixel + 1, color);
-        }
+    private static void drawCheckboxTick(PoseStack pose, int x, int y, int color) {
+        for (int index = 0; index < 3; index++) fill(pose, x + 1 + index, y + 3 + index, x + 2 + index, y + 4 + index, color);
+        for (int index = 0; index < 4; index++) fill(pose, x + 3 + index, y + 5 - index, x + 4 + index, y + 6 - index, color);
     }
 
     private static void check(PoseStack pose, int x, int y) {

@@ -13,6 +13,7 @@ import javax.annotation.Nonnull;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Inventory;
@@ -60,6 +61,10 @@ public final class PouchMenu extends AbstractContainerMenu {
         ItemStack pouch = locate(player, pouchSlot);
         if (!PouchRules.isPouch(pouch)) {
             player.displayClientMessage(new TextComponent("Equip a trinket pouch or hold one to open it."), true);
+            return;
+        }
+        if (!PouchCapability.get(pouch).isReadable()) {
+            player.displayClientMessage(new TranslatableComponent("gui.woldsvaults.pouch.unreadable"), true);
             return;
         }
         PouchMigration.stored(pouch);

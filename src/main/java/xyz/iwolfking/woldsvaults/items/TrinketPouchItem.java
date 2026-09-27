@@ -131,9 +131,17 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
             tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch_temporary").withStyle(ChatFormatting.AQUA));
         }
         PouchContents contents = PouchCapability.get(stack);
+        if (!contents.isReadable()) {
+            tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch.unreadable").withStyle(ChatFormatting.RED));
+            return;
+        }
         tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch.contents",
                 PouchContents.SIZE - contents.emptySlots(), PouchContents.SIZE)
                 .withStyle(ChatFormatting.GRAY));
+        if (contents.unreadableEntryCount() > 0) {
+            tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch.unreadable_entries", contents.unreadableEntryCount())
+                    .withStyle(ChatFormatting.GOLD));
+        }
         appendActiveTrinketsTooltip(stack, contents, tooltip);
     }
 

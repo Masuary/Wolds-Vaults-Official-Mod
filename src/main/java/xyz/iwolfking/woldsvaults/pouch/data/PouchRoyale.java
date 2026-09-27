@@ -81,6 +81,7 @@ public final class PouchRoyale {
         VaultUsesHelper.setUses(stack, 2);
         VaultUsesHelper.addUsedVault(stack, vault.get(Vault.ID));
         PouchContents contents = PouchCapability.get(pouch);
+        if (!contents.isReadable()) return reject(player, "pouch");
         int slot = contents.firstEmpty();
         if (slot < 0) return reject(player, "full");
         // Validate against an isolated candidate so a failed choice cannot erase selections or consume the offer.

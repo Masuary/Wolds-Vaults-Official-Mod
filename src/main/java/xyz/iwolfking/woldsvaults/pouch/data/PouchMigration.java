@@ -55,7 +55,7 @@ public final class PouchMigration {
             return original;
         }
         ItemStack pouch = ItemStack.of(pouchEntry);
-        if (!PouchRules.isPouch(pouch)) {
+        if (!PouchRules.isPouch(pouch) || !PouchCapability.get(pouch).isReadable()) {
             return original;
         }
         stored(pouch);
@@ -108,6 +108,9 @@ public final class PouchMigration {
             return;
         }
         PouchContents contents = PouchCapability.get(pouch);
+        if (!contents.isReadable()) {
+            return;
+        }
         ListTag legacy = tag.getList("StoredCurios", Tag.TAG_COMPOUND);
         List<ItemStack> pending = new ArrayList<>();
         for (int index = 0; index < legacy.size(); index++) {
@@ -135,7 +138,7 @@ public final class PouchMigration {
             return;
         }
         ItemStack pouch = PouchRules.equipped(player);
-        if (!PouchRules.isPouch(pouch)) {
+        if (!PouchRules.isPouch(pouch) || !PouchCapability.get(pouch).isReadable()) {
             return;
         }
         stored(pouch);

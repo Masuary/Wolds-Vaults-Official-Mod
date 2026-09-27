@@ -36,6 +36,12 @@ personal pouch afterward. Install
 matching Wolds builds on the server and client; do not also install the standalone
 Trinket Collection prototype.
 
+Loading never discards pouch data. A pouch saved by a newer or incompatible Wolds
+build keeps its data unchanged and becomes read-only, with a tooltip explaining why,
+until a compatible build loads it. Stored items that cannot be loaded, such as a
+removed trinket, are kept aside, retried on every load and restored once they become
+valid. Stale selection or preset state is repaired. Every case is logged.
+
 Join the [Discord](https://discord.gg/woldsvaults) to get a hold of me if you have any questions or concerns!
 
 Please note, as of April 5th, 2025, all new code is licensed under GPLv3, if you wish to incorporate these changes into your own mod, that's highly encouraged and I would love to see that, but please respect the licensing by also opening up your modifications to my code, thank you! I'd appreciate a shout out as well :)

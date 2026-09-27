@@ -384,7 +384,10 @@ public class ModLanguageProvider extends LanguageProvider {
         add("gui.woldsvaults.pouch.unavailable", "Unavailable");
         add("gui.woldsvaults.pouch.auto_replace_hint", "Replace exhausted active trinkets with a stored matching reserve outside vaults. No uses are refilled.");
         add("gui.woldsvaults.pouch.unequipped_hint", "Selected effects apply only while this pouch is equipped.");
+        add("gui.woldsvaults.pouch.unreadable", "This pouch was saved by an incompatible Wolds version. Its contents are preserved but it cannot be opened.");
         add("item.woldsvaults.trinket_pouch.contents", "Trinkets: %s/%s stored");
+        add("item.woldsvaults.trinket_pouch.unreadable", "Saved by an incompatible Wolds version: contents preserved, pouch read-only");
+        add("item.woldsvaults.trinket_pouch.unreadable_entries", "Unreadable entries kept safe: %s");
         add("item.woldsvaults.trinket_pouch.active", "Active selection: %s");
         add("item.woldsvaults.trinket_pouch.active.none", "Active selection: none");
         add("item.woldsvaults.trinket_pouch.active.entry", "  %s (uses: %s)");
