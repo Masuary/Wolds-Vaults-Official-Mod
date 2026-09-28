@@ -561,6 +561,7 @@
   "gui.woldsvaults.pouch.not_in_pouch": "Not in pouch",
   "gui.woldsvaults.pouch.inspect_hint": "Hover or focus a trinket to inspect it. Click to toggle.",
   "gui.woldsvaults.pouch.invalid_name": "Enter a name (1-24 characters)",
+  "gui.woldsvaults.pouch.legacy_retained": "%s item(s) stayed in the old trinket slots: they are not trinkets or your pouch is full. Take them out in the Curios inventory.",
   "gui.woldsvaults.pouch.locked": "Locked",
   "gui.woldsvaults.pouch.locked_hint": "Read-only inside vaults",
   "gui.woldsvaults.pouch.matches": "Matches active",

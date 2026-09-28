@@ -41,6 +41,9 @@ build keeps its data unchanged and becomes read-only, with a tooltip explaining 
 until a compatible build loads it. Stored items that cannot be loaded, such as a
 removed trinket, are kept aside, retried on every load and restored once they become
 valid. Stale selection or preset state is repaired. Every case is logged.
+Upgrading from the old slot-based pouch never blocks a login: every trinket that fits moves
+into the pouch, while items that are not trinkets, entries that cannot be loaded, or trinkets
+beyond the free entries stay where they were, or return to the inventory, and are logged once.
 
 Join the [Discord](https://discord.gg/woldsvaults) to get a hold of me if you have any questions or concerns!
 

@@ -279,6 +279,7 @@ public class ModLanguageProvider extends LanguageProvider {
         add("gui.woldsvaults.pouch.invalid_name", "Enter a name (1-24 characters)");
         add("gui.woldsvaults.pouch.scroll_row", "Row %s of %s");
         add("gui.woldsvaults.pouch.preset_trinkets", "Preset trinkets");
+        add("gui.woldsvaults.pouch.legacy_retained", "%s item(s) stayed in the old trinket slots: they are not trinkets or your pouch is full. Take them out in the Curios inventory.");
         add("gui.woldsvaults.pouch.royale.session", "No active Royale reward session.");
         add("gui.woldsvaults.pouch.royale.draft", "This Royale draft is no longer available. Reopen the drafter.");
         add("gui.woldsvaults.pouch.royale.consumed", "This Royale choice has already been consumed.");

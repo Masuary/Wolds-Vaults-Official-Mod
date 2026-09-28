@@ -2,22 +2,35 @@ package xyz.iwolfking.woldsvaults.pouch.data;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+import com.mojang.logging.LogUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import org.slf4j.Logger;
 import top.theillusivec4.curios.api.CuriosApi;
-import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
 
+/**
+ * Moves pre-overhaul trinkets into pouch storage. Migration is best effort and never throws: it runs while
+ * Curios loads player data and on every tick, where an exception would block login or crash the tick. Items
+ * that cannot move (not a trinket, undecodable, or no free pouch entry) stay exactly where they were.
+ */
 public final class PouchMigration {
     private static final ThreadLocal<Boolean> RESTORING = ThreadLocal.withInitial(() -> false);
     private static final UUID LEGACY_POUCH_MODIFIER = UUID.nameUUIDFromBytes("trinket_pouch0".getBytes(StandardCharsets.UTF_8));
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final int MAX_REPORTED_RETENTIONS = 512;
+    private static final Set<String> REPORTED_RETENTIONS = ConcurrentHashMap.newKeySet();
 
     private PouchMigration() {}
 
@@ -39,18 +52,7 @@ public final class PouchMigration {
         }
         CompoundTag converted = originalCompound.copy();
         ListTag curios = converted.getList("Curios", Tag.TAG_COMPOUND);
-        CompoundTag pouchEntry = null;
-        for (int index = 0; index < curios.size(); index++) {
-            CompoundTag curio = curios.getCompound(index);
-            if (curio.getString("Identifier").equals("trinket_pouch")) {
-                ListTag items = curio.getCompound("StacksHandler").getCompound("Stacks").getList("Items", Tag.TAG_COMPOUND);
-                for (int item = 0; item < items.size(); item++) {
-                    if (items.getCompound(item).getInt("Slot") == 0) {
-                        pouchEntry = items.getCompound(item);
-                    }
-                }
-            }
-        }
+        CompoundTag pouchEntry = equippedPouchEntry(curios);
         if (pouchEntry == null) {
             return original;
         }
@@ -58,42 +60,41 @@ public final class PouchMigration {
         if (!PouchRules.isPouch(pouch) || !PouchCapability.get(pouch).isReadable()) {
             return original;
         }
-        stored(pouch);
+        boolean changed = stored(pouch);
         PouchContents contents = PouchCapability.get(pouch);
-        List<ItemStack> pending = new ArrayList<>();
-        List<CompoundTag> coloredHandlers = new ArrayList<>();
+        List<Integer> moved = new ArrayList<>();
+        List<String> retainedItems = new ArrayList<>();
         for (int index = 0; index < curios.size(); index++) {
             CompoundTag curio = curios.getCompound(index);
-            if (PouchRules.COLORS.contains(curio.getString("Identifier"))) {
-                CompoundTag handler = curio.getCompound("StacksHandler");
-                coloredHandlers.add(handler);
-                ListTag items = handler.getCompound("Stacks").getList("Items", Tag.TAG_COMPOUND);
-                for (int item = 0; item < items.size(); item++) {
-                    ItemStack stack = ItemStack.of(items.getCompound(item));
-                    requireMigratable(stack);
-                    pending.add(stack);
+            if (!PouchRules.COLORS.contains(curio.getString("Identifier"))) {
+                continue;
+            }
+            CompoundTag handler = curio.getCompound("StacksHandler");
+            ListTag items = handler.getCompound("Stacks").getList("Items", Tag.TAG_COMPOUND);
+            ListTag retained = new ListTag();
+            for (int item = 0; item < items.size(); item++) {
+                CompoundTag entry = items.getCompound(item);
+                ItemStack stack = ItemStack.of(entry);
+                if (canMove(stack, contents)) {
+                    moved.add(insert(contents, stack));
+                } else {
+                    retained.add(entry);
+                    retainedItems.add(describe(entry, stack));
                 }
             }
-        }
-        requireSpace(contents, pending.size());
-        List<Integer> active = new ArrayList<>(contents.activeIndices());
-        for (ItemStack stack : pending) {
-            int slot = contents.firstEmpty();
-            contents.setStackInSlot(slot, stack);
-            active.add(slot);
-        }
-        contents.setActive(PouchRules.validSelection(pouch, contents, active));
-        for (CompoundTag handler : coloredHandlers) {
-            handler.getCompound("Stacks").put("Items", new ListTag());
-            for (String key : List.of("CachedModifiers", "PersistentModifiers")) {
-                ListTag modifiers = handler.getList(key, Tag.TAG_COMPOUND);
-                for (int index = modifiers.size() - 1; index >= 0; index--) {
-                    CompoundTag modifier = modifiers.getCompound(index);
-                    if (modifier.hasUUID("UUID") && modifier.getUUID("UUID").equals(LEGACY_POUCH_MODIFIER)) {
-                        modifiers.remove(index);
-                    }
-                }
+            if (retained.size() != items.size()) {
+                handler.getCompound("Stacks").put("Items", retained);
+                changed = true;
             }
+            // A legacy slot keeps its size while it still holds an item, so the player can take that item out.
+            if (retained.isEmpty() && removeLegacyModifiers(handler)) {
+                changed = true;
+            }
+        }
+        activate(pouch, contents, moved);
+        reportRetainedOnce("saved Curios data", retainedItems);
+        if (!changed) {
+            return original;
         }
         CompoundTag serialized = pouch.save(new CompoundTag());
         for (String key : serialized.getAllKeys()) {
@@ -102,35 +103,40 @@ public final class PouchMigration {
         return converted;
     }
 
-    public static void stored(ItemStack pouch) {
+    public static boolean stored(ItemStack pouch) {
         CompoundTag tag = pouch.getTag();
         if (tag == null || !tag.contains("StoredCurios", Tag.TAG_LIST)) {
-            return;
+            return false;
         }
         PouchContents contents = PouchCapability.get(pouch);
         if (!contents.isReadable()) {
-            return;
+            return false;
         }
         ListTag legacy = tag.getList("StoredCurios", Tag.TAG_COMPOUND);
-        List<ItemStack> pending = new ArrayList<>();
+        ListTag retained = new ListTag();
+        List<Integer> moved = new ArrayList<>();
+        List<String> retainedItems = new ArrayList<>();
         for (int index = 0; index < legacy.size(); index++) {
-            ItemStack stack = ItemStack.of(legacy.getCompound(index));
-            if (!stack.isEmpty()) {
-                requireMigratable(stack);
-                pending.add(stack);
+            CompoundTag entry = legacy.getCompound(index);
+            ItemStack stack = ItemStack.of(entry);
+            if (canMove(stack, contents)) {
+                moved.add(insert(contents, stack));
             } else {
-                throw new IllegalStateException("Cannot decode legacy pouch entry " + index + "; original StoredCurios was retained");
+                retained.add(entry.copy());
+                retainedItems.add(describe(entry, stack));
             }
         }
-        requireSpace(contents, pending.size());
-        List<Integer> active = new ArrayList<>(contents.activeIndices());
-        for (ItemStack stack : pending) {
-            int slot = contents.firstEmpty();
-            contents.setStackInSlot(slot, stack);
-            active.add(slot);
+        reportRetainedOnce("a stored pouch", retainedItems);
+        if (moved.isEmpty()) {
+            return false;
         }
-        contents.setActive(PouchRules.validSelection(pouch, contents, active));
-        tag.remove("StoredCurios");
+        activate(pouch, contents, moved);
+        if (retained.isEmpty()) {
+            tag.remove("StoredCurios");
+        } else {
+            tag.put("StoredCurios", retained);
+        }
+        return true;
     }
 
     public static void equipped(Player player) {
@@ -144,32 +150,32 @@ public final class PouchMigration {
         stored(pouch);
         PouchContents contents = PouchCapability.get(pouch);
         CuriosApi.getCuriosHelper().getCuriosHandler(player).ifPresent(handler -> {
-            List<LegacySlot> pending = new ArrayList<>();
+            List<Integer> moved = new ArrayList<>();
+            List<String> retainedItems = new ArrayList<>();
+            Set<String> colorsWithRetainedItems = new HashSet<>();
             for (String color : PouchRules.COLORS) {
                 handler.getStacksHandler(color).ifPresent(slots -> {
                     for (int index = 0; index < slots.getStacks().getSlots(); index++) {
                         ItemStack stack = slots.getStacks().getStackInSlot(index);
-                        if (!stack.isEmpty()) {
-                            requireMigratable(stack);
-                            pending.add(new LegacySlot(slots.getStacks(), index, stack));
+                        if (stack.isEmpty()) {
+                            continue;
+                        }
+                        if (canMove(stack, contents)) {
+                            moved.add(insert(contents, stack));
+                            slots.getStacks().setStackInSlot(index, ItemStack.EMPTY);
+                        } else {
+                            retainedItems.add(stack.toString());
+                            colorsWithRetainedItems.add(color);
                         }
                     }
                 });
             }
-            if (!pending.isEmpty()) {
-                requireSpace(contents, pending.size());
-                List<Integer> active = new ArrayList<>(contents.activeIndices());
-                for (LegacySlot legacy : pending) {
-                    // Move the original object only after every source item and capacity was validated.
-                    int slot = contents.firstEmpty();
-                    contents.setStackInSlot(slot, legacy.stack());
-                    legacy.handler().setStackInSlot(legacy.index(), ItemStack.EMPTY);
-                    active.add(slot);
-                }
-                contents.setActive(PouchRules.validSelection(pouch, contents, active));
-            }
+            activate(pouch, contents, moved);
             Multimap<String, AttributeModifier> obsolete = HashMultimap.create();
             for (String color : PouchRules.COLORS) {
+                if (colorsWithRetainedItems.contains(color)) {
+                    continue;
+                }
                 for (AttributeModifier modifier : handler.getModifiers().get(color)) {
                     if (modifier.getId().equals(LEGACY_POUCH_MODIFIER)) {
                         obsolete.put(color, modifier);
@@ -179,20 +185,77 @@ public final class PouchMigration {
             if (!obsolete.isEmpty()) {
                 handler.removeSlotModifiers(obsolete);
             }
+            if (reportRetainedOnce(player.getGameProfile().getName(), retainedItems)) {
+                player.displayClientMessage(new TranslatableComponent("gui.woldsvaults.pouch.legacy_retained", retainedItems.size()), false);
+            }
         });
     }
 
-    private static void requireMigratable(ItemStack stack) {
-        if (!PouchRules.isStoredItem(stack) || stack.getCount() != 1) {
-            throw new IllegalStateException("Legacy pouch contains an unsupported item; refusing to remove the original stack: " + stack);
+    private static CompoundTag equippedPouchEntry(ListTag curios) {
+        for (int index = 0; index < curios.size(); index++) {
+            CompoundTag curio = curios.getCompound(index);
+            if (curio.getString("Identifier").equals("trinket_pouch")) {
+                ListTag items = curio.getCompound("StacksHandler").getCompound("Stacks").getList("Items", Tag.TAG_COMPOUND);
+                for (int item = 0; item < items.size(); item++) {
+                    if (items.getCompound(item).getInt("Slot") == 0) {
+                        return items.getCompound(item);
+                    }
+                }
+            }
         }
+        return null;
     }
 
-    private static void requireSpace(PouchContents contents, int count) {
-        if (count > contents.emptySlots()) {
-            throw new IllegalStateException("Legacy pouch needs " + count + " free entries but has " + contents.emptySlots() + "; originals retained");
-        }
+    private static boolean canMove(ItemStack stack, PouchContents contents) {
+        return PouchRules.isStoredItem(stack) && stack.getCount() == 1 && contents.firstEmpty() >= 0;
     }
 
-    private record LegacySlot(IDynamicStackHandler handler, int index, ItemStack stack) {}
+    private static int insert(PouchContents contents, ItemStack stack) {
+        int slot = contents.firstEmpty();
+        contents.setStackInSlot(slot, stack);
+        return slot;
+    }
+
+    private static void activate(ItemStack pouch, PouchContents contents, List<Integer> moved) {
+        if (moved.isEmpty()) {
+            return;
+        }
+        List<Integer> active = new ArrayList<>(contents.activeIndices());
+        active.addAll(moved);
+        contents.setActive(PouchRules.validSelection(pouch, contents, active));
+    }
+
+    private static boolean removeLegacyModifiers(CompoundTag handler) {
+        boolean removed = false;
+        for (String key : List.of("CachedModifiers", "PersistentModifiers")) {
+            ListTag modifiers = handler.getList(key, Tag.TAG_COMPOUND);
+            for (int index = modifiers.size() - 1; index >= 0; index--) {
+                CompoundTag modifier = modifiers.getCompound(index);
+                if (modifier.hasUUID("UUID") && modifier.getUUID("UUID").equals(LEGACY_POUCH_MODIFIER)) {
+                    modifiers.remove(index);
+                    removed = true;
+                }
+            }
+        }
+        return removed;
+    }
+
+    private static String describe(CompoundTag entry, ItemStack stack) {
+        return stack.isEmpty() ? "undecodable " + entry.getString("id") : stack.toString();
+    }
+
+    private static boolean reportRetainedOnce(String owner, List<String> retainedItems) {
+        if (retainedItems.isEmpty()) {
+            return false;
+        }
+        if (REPORTED_RETENTIONS.size() >= MAX_REPORTED_RETENTIONS) {
+            REPORTED_RETENTIONS.clear();
+        }
+        if (!REPORTED_RETENTIONS.add(owner + ":" + retainedItems)) {
+            return false;
+        }
+        LOGGER.warn("Kept {} legacy trinket slot item(s) of {} in place (not a trinket, undecodable, or no free pouch entry): {}",
+                retainedItems.size(), owner, retainedItems);
+        return true;
+    }
 }
