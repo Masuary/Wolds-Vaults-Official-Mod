@@ -1,8 +1,14 @@
 package xyz.iwolfking.woldsvaults.pouch.data;
 
 import iskallia.vault.core.vault.Vault;
+import iskallia.vault.core.vault.VaultUtils;
+import iskallia.vault.core.vault.player.ClassicListenersLogic;
+import iskallia.vault.core.vault.player.Listeners;
+import iskallia.vault.core.vault.player.Runner;
+import iskallia.vault.core.vault.time.TickClock;
 import iskallia.vault.gear.trinket.TrinketEffect;
 import iskallia.vault.gear.trinket.TrinketHelper;
+import iskallia.vault.gear.trinket.effects.VaultTimeExtensionTrinket;
 import iskallia.vault.integration.IntegrationCurios;
 import iskallia.vault.item.gear.TrinketItem;
 import iskallia.vault.item.gear.VaultUsesHelper;
@@ -12,7 +18,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Tuple;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -58,6 +66,25 @@ public final class PouchRules {
                 && vault.get(Vault.LISTENERS).contains(player.getUUID()));
     }
 
+    /**
+     * The vault in which {@code player} may still change their equipped loadout: they are a runner in a
+     * non-Royale vault whose clock has never run. Bosses and raids pause the clock mid-run, so a pause alone
+     * is not enough.
+     */
+    public static Optional<Vault> startRoomVault(Player player) {
+        if (!(player instanceof ServerPlayer)) {
+            return Optional.empty();
+        }
+        return ServerVaults.get(player.level).filter(vault -> !VaultUtils.isAnyRoyale(vault)
+                && vault.has(Vault.LISTENERS) && vault.get(Vault.LISTENERS).get(player.getUUID()) instanceof Runner
+                && vault.get(Vault.LISTENERS).get(Listeners.LOGIC) instanceof ClassicListenersLogic
+                && vault.has(Vault.CLOCK) && vault.get(Vault.CLOCK).get(TickClock.LOGICAL_TIME) == 0);
+    }
+
+    public static boolean isTimeExtension(ItemStack stack) {
+        return effects(stack).stream().anyMatch(effect -> effect.trinket() instanceof VaultTimeExtensionTrinket);
+    }
+
     public static Map<String, Integer> capacities(ItemStack pouch) {
         return TrinketPouchItem.getPouchConfigFor(pouch).SLOT_ENTRIES;
     }
@@ -76,7 +103,12 @@ public final class PouchRules {
     }
 
     public static String validate(ItemStack pouch, PouchContents contents, List<Integer> indices, Player player) {
-        SelectionValidator validator = new SelectionValidator(pouch, contents, player);
+        return validate(pouch, contents, indices, player, true);
+    }
+
+    /** {@code checkEquipRules} is false in a vault start room, where trinkets' own equip rules refuse every vault. */
+    public static String validate(ItemStack pouch, PouchContents contents, List<Integer> indices, Player player, boolean checkEquipRules) {
+        SelectionValidator validator = new SelectionValidator(pouch, contents, player, checkEquipRules);
         for (int index : indices) {
             String error = validator.accept(index);
             if (!error.isEmpty()) {
@@ -88,7 +120,7 @@ public final class PouchRules {
 
     public static List<Integer> validSelection(ItemStack pouch, PouchContents contents, List<Integer> requested) {
         List<Integer> accepted = new ArrayList<>();
-        SelectionValidator validator = new SelectionValidator(pouch, contents, null);
+        SelectionValidator validator = new SelectionValidator(pouch, contents, null, true);
         for (int index : requested) {
             if (validator.accept(index).isEmpty()) {
                 accepted.add(index);
@@ -100,13 +132,15 @@ public final class PouchRules {
     private static final class SelectionValidator {
         private final PouchContents contents;
         private final Player player;
+        private final boolean checkEquipRules;
         private final Map<String, Integer> capacities;
         private final Map<String, Integer> counts = new HashMap<>();
         private final Set<TrinketEffect<?>> effects = new HashSet<>();
 
-        private SelectionValidator(ItemStack pouch, PouchContents contents, Player player) {
+        private SelectionValidator(ItemStack pouch, PouchContents contents, Player player, boolean checkEquipRules) {
             this.contents = contents;
             this.player = player;
+            this.checkEquipRules = checkEquipRules;
             this.capacities = capacities(pouch);
         }
 
@@ -132,7 +166,7 @@ public final class PouchRules {
                     return "This effect is already active";
                 }
             }
-            if (player != null && !((ICurioItem) stack.getItem()).canEquip(context(player, stack, index), stack)) {
+            if (player != null && checkEquipRules && !((ICurioItem) stack.getItem()).canEquip(context(player, stack, index), stack)) {
                 return "This trinket cannot be equipped right now";
             }
             // A rejected candidate must not consume capacity or block later candidates' effects.

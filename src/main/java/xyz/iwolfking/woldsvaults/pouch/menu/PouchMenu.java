@@ -7,6 +7,9 @@ import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchMigration;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchRuntime;
+import xyz.iwolfking.woldsvaults.pouch.data.PouchStartRoom;
+import iskallia.vault.core.vault.Vault;
+import java.util.Optional;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -46,6 +49,7 @@ public final class PouchMenu extends AbstractContainerMenu {
     public enum Feedback { NONE, SAVED, APPLIED, RENAMED, ERROR }
     private boolean storedView;
     private boolean locked;
+    private boolean startRoom;
     private boolean receivingSlotSync;
 
     public static void open(ServerPlayer player, int pouchSlot) {
@@ -202,7 +206,9 @@ public final class PouchMenu extends AbstractContainerMenu {
 
     @Override
     public boolean clickMenuButton(Player player, int button) {
-        if (!stillValid(player) || isLocked() || player.level.isClientSide) {
+        boolean loadoutButton = button >= TOGGLE_TRINKET && button < TOGGLE_TRINKET + PouchContents.SIZE
+                || button >= SAVE_PRESET && button < APPLY_PRESET + PouchContents.PRESET_COUNT;
+        if (!stillValid(player) || player.level.isClientSide || isLocked() && !(loadoutButton && inStartRoom())) {
             return false;
         }
         beginStatus(button >= SAVE_PRESET && button < APPLY_PRESET + PouchContents.PRESET_COUNT
@@ -220,7 +226,7 @@ public final class PouchMenu extends AbstractContainerMenu {
         } else if (button >= APPLY_PRESET && button < APPLY_PRESET + PouchContents.PRESET_COUNT) {
             int preset = button - APPLY_PRESET;
             List<Integer> available = contents.resolvePreset(preset);
-            apply(available);
+            apply(isLocked() ? PouchStartRoom.keepTimeTrinkets(contents, available) : available);
             if (status.isEmpty()) {
                 contents.markPresetApplied(preset);
                 feedback = Feedback.APPLIED;
@@ -236,10 +242,17 @@ public final class PouchMenu extends AbstractContainerMenu {
     }
 
     private void apply(List<Integer> active) {
-        status = PouchRules.validate(pouch, contents, active, owner);
-        if (status.isEmpty()) {
-            contents.setActive(active);
+        if (isLocked()) {
+            Optional<Vault> vault = isEquipped() ? PouchRules.startRoomVault(owner) : Optional.empty();
+            status = vault.map(startRoomVault -> PouchStartRoom.apply((ServerPlayer) owner, startRoomVault, pouch, contents, active))
+                    .orElse("This pouch is locked inside vaults");
         } else {
+            status = PouchRules.validate(pouch, contents, active, owner);
+            if (status.isEmpty()) {
+                contents.setActive(active);
+            }
+        }
+        if (!status.isEmpty()) {
             feedback = Feedback.ERROR;
         }
     }
@@ -252,7 +265,7 @@ public final class PouchMenu extends AbstractContainerMenu {
     }
 
     public boolean renamePreset(Player player, int preset, String name) {
-        if (!stillValid(player) || isLocked() || player.level.isClientSide || preset < 0 || preset >= PouchContents.PRESET_COUNT) {
+        if (!stillValid(player) || isLocked() && !inStartRoom() || player.level.isClientSide || preset < 0 || preset >= PouchContents.PRESET_COUNT) {
             return false;
         }
         beginStatus(preset);
@@ -304,6 +317,7 @@ public final class PouchMenu extends AbstractContainerMenu {
         if (owner instanceof ServerPlayer player) {
             CompoundTag state = contents.serializeNBT();
             state.putBoolean("Locked", PouchRules.locked(owner));
+            state.putBoolean("StartRoom", inStartRoom());
             state.putString("Status", status);
             state.putInt("StatusPreset", statusPreset);
             state.putInt("StatusRevision", statusRevision);
@@ -321,6 +335,7 @@ public final class PouchMenu extends AbstractContainerMenu {
         }
         contents.deserializeNBT(state);
         locked = state.getBoolean("Locked");
+        startRoom = state.getBoolean("StartRoom");
         status = state.getString("Status");
         statusPreset = state.getInt("StatusPreset");
         feedback = Feedback.values()[state.getInt("Feedback")];
@@ -342,6 +357,8 @@ public final class PouchMenu extends AbstractContainerMenu {
         return feedback != Feedback.NONE && System.nanoTime() - statusReceivedAt < 3_000_000_000L;
     }
     public boolean isLocked() { return owner.level.isClientSide ? locked : PouchRules.locked(owner); }
+    public boolean inStartRoom() { return owner.level.isClientSide ? startRoom : isEquipped() && PouchRules.startRoomVault(owner).isPresent(); }
+    public boolean canChangeLoadout() { return !isLocked() || inStartRoom(); }
     public boolean storedView() { return storedView; }
     public void setStoredView(boolean value) { storedView = value; }
 }

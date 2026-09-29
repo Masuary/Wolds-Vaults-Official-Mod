@@ -31,6 +31,10 @@ Storage also supports configuring individual copies.
 
 Pouch editing and automatic replacement are locked from vault registration until
 the player has left the vault. Exhausted trinkets can be replaced afterward.
+In a vault's start room, before its timer has started, the equipped pouch's selection
+and presets can still change: activating a trinket uses a charge exactly like vault entry,
+deactivating refunds it (a refunded free use stays free), and trinkets that add vault time
+stay as entered. Storage, equipping and auto-replace stay locked, and Royale is excluded.
 Royale uses a temporary pouch for its starting trinket choices and restores the
 personal pouch afterward. Install
 matching Wolds builds on the server and client; do not also install the standalone

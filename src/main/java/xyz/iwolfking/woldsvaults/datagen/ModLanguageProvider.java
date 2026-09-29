@@ -322,6 +322,9 @@ public class ModLanguageProvider extends LanguageProvider {
         add("gui.woldsvaults.pouch.equipped", "Equipped");
         add("gui.woldsvaults.pouch.unequipped", "Not equipped");
         add("gui.woldsvaults.pouch.locked", "Locked");
+        add("gui.woldsvaults.pouch.start_room", "Start room");
+        add("gui.woldsvaults.pouch.start_room_hint", "Until the vault timer starts, activating a trinket uses a charge and deactivating refunds it");
+        add("gui.woldsvaults.pouch.time_fixed", "Time trinkets stay as entered");
         add("gui.woldsvaults.pouch.counts_active", "%s active / %s stored");
         add("gui.woldsvaults.pouch.counts_selected", "%s selected / %s stored");
         add("gui.woldsvaults.pouch.auto_replace", "Auto-replace used trinkets");

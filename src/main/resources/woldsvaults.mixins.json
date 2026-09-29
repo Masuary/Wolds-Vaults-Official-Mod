@@ -176,6 +176,7 @@
     "vaulthunters.accessors.CastOnKillTalentAccessor",
     "vaulthunters.accessors.ClassicCircleCrystalLayoutAccessor",
     "vaulthunters.accessors.ClassicInfiniteCrystalLayoutAccessor",
+    "vaulthunters.accessors.ClassicListenersLogicAccessor",
     "vaulthunters.accessors.ClassicPolygonCrystalLayoutAccessor",
     "vaulthunters.accessors.ClassicSpiralCrystalLayoutAccessor",
     "vaulthunters.accessors.ClientEventsAccessor",

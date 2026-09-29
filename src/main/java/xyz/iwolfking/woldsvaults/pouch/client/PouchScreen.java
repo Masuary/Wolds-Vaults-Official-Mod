@@ -233,7 +233,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     private void resetLaneScrolls() { collectionScroll.setFirstRow(0); }
 
     private void action(int action) {
-        if (!menu.isLocked() && minecraft != null && minecraft.gameMode != null) {
+        if (menu.canChangeLoadout() && minecraft != null && minecraft.gameMode != null) {
             minecraft.gameMode.handleInventoryButtonClick(menu.containerId, action);
         }
     }
@@ -250,7 +250,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         super.containerTick();
         search.tick();
         presetName.tick();
-        if (menu.isLocked() && dialog != Dialog.NONE) {
+        if (!menu.canChangeLoadout() && dialog != Dialog.NONE) {
             closeDialog();
         }
         refreshEntries();
@@ -353,7 +353,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         }
         for (Button control : List.of(renamePreset, savePreset, applyPreset)) {
             control.visible = view == View.STORAGE;
-            control.active = !modal && !menu.isLocked();
+            control.active = !modal && menu.canChangeLoadout();
         }
         savePreset.setMessage(label(feedbackVisible() && menu.feedback() == PouchMenu.Feedback.SAVED ? "preset_saved" : "save"));
         renamePreset.setMessage(label(feedbackVisible() && menu.feedback() == PouchMenu.Feedback.RENAMED ? "preset_renamed" : "rename"));
@@ -366,7 +366,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         autoReplace.setMessage(text(menu.contents().autoReplace() ? "x" : ""));
         presetName.visible = dialog == Dialog.RENAME;
         confirm.visible = cancel.visible = modal;
-        confirm.active = !menu.isLocked();
+        confirm.active = menu.canChangeLoadout();
         confirm.setMessage(label(dialog == Dialog.OVERWRITE ? "replace" : "save"));
     }
 
@@ -391,7 +391,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     }
 
     private void confirmDialog() {
-        if (menu.isLocked()) return;
+        if (!menu.canChangeLoadout()) return;
         if (dialog == Dialog.RENAME) {
             try {
                 String name = PouchContents.validatedPresetName(presetName.getValue());
@@ -587,7 +587,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         if (menu.contents().isActive(chosen)) return "";
         List<Integer> proposed = new ArrayList<>(menu.contents().activeIndices());
         proposed.add(chosen);
-        return PouchRules.validate(menu.pouch(), menu.contents(), proposed, minecraft.player);
+        return PouchRules.validate(menu.pouch(), menu.contents(), proposed, minecraft.player, !menu.inStartRoom());
     }
 
     @Override
@@ -596,9 +596,9 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         font.draw(pose, fit(label("auto_replace").getString(), showStatus ? 175 : 249),
                 27, PouchLayout.FOOTER_Y + 3, MUTED);
         if (showStatus) {
-            String status = fit(label(menu.isLocked() ? "locked" : "unequipped").getString(), 72);
+            String status = fit(label(footerStatus()).getString(), 72);
             font.draw(pose, status, 276 - font.width(status), PouchLayout.FOOTER_Y + 3,
-                    menu.isLocked() ? 0x992222 : MUTED);
+                    menu.inStartRoom() ? 0x3F6B2A : menu.isLocked() ? 0x992222 : MUTED);
         }
         if (view == View.COLLECTION) {
             if (entries.isEmpty()) font.draw(pose, label("no_matches"), 16, 59, MUTED);
@@ -646,10 +646,15 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 active ? 0x435B33 : reason.getString().isEmpty() ? MUTED : 0x883333);
     }
 
+    private String footerStatus() {
+        return menu.inStartRoom() ? "start_room" : menu.isLocked() ? "locked" : "unequipped";
+    }
+
     private Component activationBlock(Entry entry) {
         int chosen = chosenIndex(entry);
         if (chosen < 0) return label("not_in_pouch");
-        if (menu.isLocked()) return label("locked");
+        if (!menu.canChangeLoadout()) return label("locked");
+        if (menu.inStartRoom() && PouchRules.isTimeExtension(menu.contents().getStackInSlot(chosen))) return label("time_fixed");
         if (menu.contents().isActive(chosen)) return TextComponent.EMPTY;
         if (PouchRules.remainingUses(menu.contents().getStackInSlot(chosen)) == 0) return label("exhausted");
         String error = selectionError(entry);
@@ -757,10 +762,10 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             }
         }
         if (isHintTarget(autoReplace, mouseX, mouseY) || isMouseHintInside(mouseX, mouseY, 26, PouchLayout.FOOTER_Y, 175, 14)) {
-            tooltip(pose, mouseX, mouseY, label(menu.isLocked() ? "locked_hint" : "auto_replace_hint"));
+            tooltip(pose, mouseX, mouseY, label(menu.isLocked() ? footerStatus() + "_hint" : "auto_replace_hint"));
             return true;
         } else if ((menu.isLocked() || !menu.isEquipped()) && isMouseHintInside(mouseX, mouseY, 204, PouchLayout.FOOTER_Y, 76, 14)) {
-            tooltip(pose, mouseX, mouseY, label(menu.isLocked() ? "locked_hint" : "unequipped_hint"));
+            tooltip(pose, mouseX, mouseY, label(footerStatus() + "_hint"));
             return true;
         }
         return false;
