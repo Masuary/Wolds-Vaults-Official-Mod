@@ -1,6 +1,5 @@
-package xyz.iwolfking.woldsvaults.pouch.menu;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch.menu;
 
-/** Logical pixels shared by the screen, real slots and layout assertions. */
 public final class PouchLayout {
     public static final int WIDTH = 288;
     public static final int HEIGHT = 198;

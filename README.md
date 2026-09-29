@@ -2,53 +2,6 @@ Hello, you have reached the lovely home of the Wold's Vaults Official mod, a mod
 
 Please feel free to open a PR and contribute if you'd like! All are more than welcome to do so.
 
-## Trinket pouches
-
-Pouches store real trinkets in one Curios slot. The collection screen provides
-search, filters and compact trinket descriptions. The Storage tab combines the
-physical inventory with three named loadout presets, a selected-preset preview,
-and Apply, Save and Rename controls. Open an equipped pouch with Ctrl+T (rebindable), or
-right-click a pouch in the inventory or in its Curios slot. Selected effects apply only while equipped.
-Presets remember trinket types, so removing or exhausting a copy never erases the saved
-loadout. Applying a preset uses available copies and reports missing entries. Refill
-missing types and apply again to restore the full loadout, regardless of auto-replace.
-Existing slot-based presets migrate automatically when the pouch loads.
-The viewed preset has a neutral outline; a muted tint marks the last applied preset.
-Identical presets show Same loadout. Partial applications keep their preset identity,
-while manual selection changes switch to Custom loadout. Save, Apply and Rename
-confirmations briefly appear on their own buttons without replacing the loadout status.
-Collection hover text shows the name and available action; descriptions and uses
-appear in the details panel. Storage items and preset previews include compact detail tooltips.
-The inventory HUD shows selected pouch trinkets in their existing colour groups,
-with the configured icons and remaining-use indicators. Stored reserves stay hidden.
-With auto-replace enabled, the collection details and HUD combine remaining uses
-across matching copies in the pouch. Storage tooltips still describe each individual
-copy. Collection icons omit copy counts and durability bars.
-Mouse hover takes over tooltip focus after keyboard navigation, with one tooltip
-shown at a time. Weighted Boots descriptions show the stored copy's speed limit
-and the configured key for editing it while hovered or keyboard-focused in Trinkets.
-Storage also supports configuring individual copies.
-
-Pouch editing and automatic replacement are locked from vault registration until
-the player has left the vault. Exhausted trinkets can be replaced afterward.
-In a vault's start room, before its timer has started, the equipped pouch's selection
-and presets can still change: activating a trinket uses a charge exactly like vault entry,
-deactivating refunds it (a refunded free use stays free), and trinkets that add vault time
-stay as entered. Storage, equipping and auto-replace stay locked, and Royale is excluded.
-Royale uses a temporary pouch for its starting trinket choices and restores the
-personal pouch afterward. Install
-matching Wolds builds on the server and client; do not also install the standalone
-Trinket Collection prototype.
-
-Loading never discards pouch data. A pouch saved by a newer or incompatible Wolds
-build keeps its data unchanged and becomes read-only, with a tooltip explaining why,
-until a compatible build loads it. Stored items that cannot be loaded, such as a
-removed trinket, are kept aside, retried on every load and restored once they become
-valid. Stale selection or preset state is repaired. Every case is logged.
-Upgrading from the old slot-based pouch never blocks a login: every trinket that fits moves
-into the pouch, while items that are not trinkets, entries that cannot be loaded, or trinkets
-beyond the free entries stay where they were, or return to the inventory, and are logged once.
-
 Join the [Discord](https://discord.gg/woldsvaults) to get a hold of me if you have any questions or concerns!
 
 Please note, as of April 5th, 2025, all new code is licensed under GPLv3, if you wish to incorporate these changes into your own mod, that's highly encouraged and I would love to see that, but please respect the licensing by also opening up your modifications to my code, thank you! I'd appreciate a shout out as well :)

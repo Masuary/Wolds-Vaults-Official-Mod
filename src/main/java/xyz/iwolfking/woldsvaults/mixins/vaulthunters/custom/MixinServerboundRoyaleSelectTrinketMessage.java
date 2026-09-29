@@ -7,13 +7,13 @@ import net.minecraftforge.network.NetworkEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import xyz.iwolfking.woldsvaults.mixins.vaulthunters.accessors.ServerboundRoyaleSelectTrinketMessageAccessor;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchRoyale;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchRoyale;
 
 @Mixin(value = ServerboundRoyaleSelectTrinketMessage.class, remap = false)
 public class MixinServerboundRoyaleSelectTrinketMessage {
     /**
      * @author iwolfking
-     * @reason Validate the live draft and insert its reward into the temporary pouch exactly once.
+     * @reason Insert the chosen trinket into the Royale pouch once
      */
     @Overwrite
     public static void handle(ServerboundRoyaleSelectTrinketMessage message, Supplier<NetworkEvent.Context> contextSupplier) {

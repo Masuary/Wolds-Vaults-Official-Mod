@@ -8,12 +8,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Map;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchRoyale;
 
 @Mixin(value = RoyalePresetConfig.class, remap = false)
 public abstract class MixinRoyalePresetConfig {
 
     @Inject(method = "apply", at = @At("TAIL"))
     private static void setTrinketPouch(ServerPlayer player, String presetKey, int vaultLevel, Map<String, Integer> preset, CallbackInfo ci) {
-        xyz.iwolfking.woldsvaults.pouch.data.PouchRoyale.equipAfterSnapshot(player);
+        PouchRoyale.equipAfterSnapshot(player);
     }
 }

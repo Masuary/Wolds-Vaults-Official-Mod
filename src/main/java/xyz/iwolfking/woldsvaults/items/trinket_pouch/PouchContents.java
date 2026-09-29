@@ -1,4 +1,4 @@
-package xyz.iwolfking.woldsvaults.pouch.data;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch;
 
 import com.mojang.logging.LogUtils;
 import java.util.ArrayList;
@@ -17,19 +17,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.items.ItemStackHandler;
 import org.slf4j.Logger;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
 
-/**
- * Owns physical stacks and active slot indices; presets remember effect keys independently of storage.
- *
- * <p>Loading never throws: ItemStack.of swallows exceptions and returns an empty stack, which would delete the pouch.
- * Unreadable formats are preserved verbatim and made read-only; unreadable item entries are kept raw and retried.
- */
 public final class PouchContents extends ItemStackHandler {
     public static final int SIZE = 27;
     public static final int SCHEMA = 4;
     public static final int PRESET_COUNT = 3;
     public static final int MAX_PRESET_NAME_LENGTH = 24;
-    // Additive key: schema 4 readers without it ignore the list instead of rejecting the pouch.
     private static final String UNREADABLE_ENTRIES_KEY = "Unreadable";
     private static final int MAX_REPORTED_FINGERPRINTS = 512;
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -54,7 +48,7 @@ public final class PouchContents extends ItemStackHandler {
 
     @Override
     public boolean isItemValid(int slot, @Nonnull ItemStack stack) {
-        return isReadable() && PouchRules.isTrinket(stack);
+        return isReadable() && PouchHelper.isTrinket(stack);
     }
 
     @Override
@@ -69,17 +63,15 @@ public final class PouchContents extends ItemStackHandler {
 
     public void synchronizeStackInSlot(int slot, ItemStack stack) {
         validateStoredStack(stack);
-        // Network replacements can differ only in client display caches, not the stored trinket.
         super.setStackInSlot(slot, stack);
     }
 
     private static void validateStoredStack(ItemStack stack) {
-        if (!stack.isEmpty() && (!PouchRules.isStoredItem(stack) || stack.getCount() != 1)) {
+        if (!stack.isEmpty() && (!PouchHelper.isStoredItem(stack) || stack.getCount() != 1)) {
             throw new IllegalArgumentException("Pouch storage requires one trinket per slot");
         }
     }
 
-    /** False when the saved format could not be interpreted; the original data is then preserved read-only. */
     public boolean isReadable() {
         return preservedUnreadableData == null;
     }
@@ -133,7 +125,7 @@ public final class PouchContents extends ItemStackHandler {
     public void savePreset(int preset) {
         requireReadable();
         Set<String> selection = new LinkedHashSet<>();
-        for (ItemStack stack : activeStacks()) selection.add(validatedEffectKey(PouchRules.effectKey(stack)));
+        for (ItemStack stack : activeStacks()) selection.add(validatedEffectKey(PouchHelper.effectKey(stack)));
         presets.get(preset).clear();
         presets.get(preset).addAll(selection);
         if (appliedPreset == preset && selection.isEmpty()) appliedPreset = -1;
@@ -141,7 +133,7 @@ public final class PouchContents extends ItemStackHandler {
 
     private Set<String> effectKeys(List<Integer> indices) {
         Set<String> keys = new LinkedHashSet<>();
-        for (int index : indices) keys.add(PouchRules.effectKey(getStackInSlot(index)));
+        for (int index : indices) keys.add(PouchHelper.effectKey(getStackInSlot(index)));
         return keys;
     }
 
@@ -171,8 +163,8 @@ public final class PouchContents extends ItemStackHandler {
         int fewestUses = Integer.MAX_VALUE;
         for (int index = 0; index < SIZE; index++) {
             ItemStack stack = getStackInSlot(index);
-            if (!PouchRules.isTrinket(stack) || !effectKey.equals(PouchRules.effectKey(stack))) continue;
-            int uses = PouchRules.remainingUses(stack);
+            if (!PouchHelper.isTrinket(stack) || !effectKey.equals(PouchHelper.effectKey(stack))) continue;
+            int uses = PouchHelper.remainingUses(stack);
             if (uses == 0) continue;
             if (isActive(index)) return index;
             if (uses < fewestUses) {
@@ -358,7 +350,7 @@ public final class PouchContents extends ItemStackHandler {
 
         Map<Integer, String> keysBySlot = new LinkedHashMap<>();
         for (int slot : placedAtSavedSlot) {
-            keysBySlot.put(slot, PouchRules.effectKey(stacks.get(slot)));
+            keysBySlot.put(slot, PouchHelper.effectKey(stacks.get(slot)));
         }
         List<Integer> decodedActive = decodeIndices(tag.getIntArray("Active"), keysBySlot.keySet(), "active selection", repairs);
         for (int index = 0; index < PRESET_COUNT; index++) {
@@ -382,7 +374,7 @@ public final class PouchContents extends ItemStackHandler {
 
     private static ItemStack decodeStoredStack(CompoundTag entry) {
         ItemStack stack = ItemStack.of(entry);
-        return !stack.isEmpty() && stack.getCount() == 1 && PouchRules.isStoredItem(stack) ? stack : ItemStack.EMPTY;
+        return !stack.isEmpty() && stack.getCount() == 1 && PouchHelper.isStoredItem(stack) ? stack : ItemStack.EMPTY;
     }
 
     private void placeHomeless(DecodedEntry entry) {
@@ -464,7 +456,6 @@ public final class PouchContents extends ItemStackHandler {
         if (REPORTED_FINGERPRINTS.size() >= MAX_REPORTED_FINGERPRINTS) {
             REPORTED_FINGERPRINTS.clear();
         }
-        // Pouches are re-decoded on every copy and sync; report each distinct problem once.
         return REPORTED_FINGERPRINTS.add(category + ":" + tag.hashCode());
     }
 

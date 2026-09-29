@@ -1,6 +1,5 @@
-package xyz.iwolfking.woldsvaults.pouch.menu;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch.menu;
 
-/** A viewport only: scrolling never changes stored items or their selected indices. */
 public final class PouchGridScroll {
     private final int columns;
     private final int visibleRows;

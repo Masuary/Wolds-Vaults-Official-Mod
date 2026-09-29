@@ -1,4 +1,4 @@
-package xyz.iwolfking.woldsvaults.pouch.data;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -12,9 +12,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import top.theillusivec4.curios.api.type.capability.ICurioItem;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
 
 public final class PouchRuntime {
-    // Client and integrated-server ticks share a JVM, but never a Player instance.
     private static final Map<Player, Map<ItemStack, WornEntry>> WORN = new WeakHashMap<>();
 
     private PouchRuntime() {}
@@ -22,6 +22,9 @@ public final class PouchRuntime {
     public static void tick(TickEvent.PlayerTickEvent event) {
         if (event.phase == TickEvent.Phase.START) {
             PouchMigration.equipped(event.player);
+            if (event.player instanceof ServerPlayer player) {
+                PouchStartRoom.trackDeparture(player);
+            }
         } else {
             update(event.player);
         }
@@ -39,21 +42,21 @@ public final class PouchRuntime {
     }
 
     public static synchronized void update(Player player) {
-        ItemStack pouch = PouchRules.equipped(player);
+        ItemStack pouch = PouchHelper.equipped(player);
         Map<ItemStack, WornEntry> previous = WORN.getOrDefault(player, Map.of());
-        if (previous.isEmpty() && (!player.isAlive() || !PouchRules.isPouch(pouch))) {
+        if (previous.isEmpty() && (!player.isAlive() || !PouchHelper.isPouch(pouch))) {
             return;
         }
         Map<ItemStack, WornEntry> next = new IdentityHashMap<>();
-        if (player.isAlive() && PouchRules.isPouch(pouch)) {
+        if (player.isAlive() && PouchHelper.isPouch(pouch)) {
             PouchContents contents = PouchCapability.get(pouch);
             List<Integer> requested = contents.activeIndices();
-            List<Integer> selected = PouchRules.validSelection(pouch, contents, requested);
+            List<Integer> selected = PouchHelper.validSelection(pouch, contents, requested);
             if (!player.level.isClientSide) {
                 if (!selected.equals(requested)) {
                     contents.setActive(selected);
                 }
-                if (contents.autoReplace() && !selected.isEmpty() && !PouchRules.locked(player)) {
+                if (contents.autoReplace() && !selected.isEmpty() && !PouchHelper.locked(player)) {
                     selected = replaceExhausted(pouch, contents, player, selected);
                 }
             }
@@ -71,9 +74,9 @@ public final class PouchRuntime {
         next.forEach((stack, entry) -> {
             ICurioItem item = (ICurioItem) stack.getItem();
             if (!previous.containsKey(stack)) {
-                item.onEquip(PouchRules.context(player, stack, entry.index()), ItemStack.EMPTY, stack);
+                item.onEquip(PouchHelper.context(player, stack, entry.index()), ItemStack.EMPTY, stack);
             }
-            item.curioTick(PouchRules.context(player, stack, entry.index()), stack);
+            item.curioTick(PouchHelper.context(player, stack, entry.index()), stack);
         });
         if (player instanceof ServerPlayer serverPlayer && !previous.keySet().equals(next.keySet())) {
             AttributeSnapshotHelper.getInstance().refreshSnapshotDelayed(serverPlayer);
@@ -89,7 +92,7 @@ public final class PouchRuntime {
 
     private static void unequip(Player player, ItemStack stack, int index) {
         if (stack.getItem() instanceof ICurioItem item) {
-            item.onUnequip(PouchRules.context(player, stack, index), ItemStack.EMPTY, stack);
+            item.onUnequip(PouchHelper.context(player, stack, index), ItemStack.EMPTY, stack);
         }
     }
 
@@ -97,17 +100,17 @@ public final class PouchRuntime {
         List<Integer> replacement = selected;
         for (int position = 0; position < replacement.size(); position++) {
             ItemStack exhausted = contents.getStackInSlot(replacement.get(position));
-            if (PouchRules.remainingUses(exhausted) > 0) {
+            if (PouchHelper.remainingUses(exhausted) > 0) {
                 continue;
             }
-            String effect = PouchRules.effectKey(exhausted);
+            String effect = PouchHelper.effectKey(exhausted);
             for (int reserve = 0; reserve < PouchContents.SIZE; reserve++) {
                 ItemStack candidate = contents.getStackInSlot(reserve);
-                if (!replacement.contains(reserve) && PouchRules.remainingUses(candidate) > 0
-                        && effect.equals(PouchRules.effectKey(candidate))) {
+                if (!replacement.contains(reserve) && PouchHelper.remainingUses(candidate) > 0
+                        && effect.equals(PouchHelper.effectKey(candidate))) {
                     List<Integer> trial = new ArrayList<>(replacement);
                     trial.set(position, reserve);
-                    if (PouchRules.validate(pouch, contents, trial, player).isEmpty()) {
+                    if (PouchHelper.validate(pouch, contents, trial, player).isEmpty()) {
                         replacement = trial;
                         break;
                     }

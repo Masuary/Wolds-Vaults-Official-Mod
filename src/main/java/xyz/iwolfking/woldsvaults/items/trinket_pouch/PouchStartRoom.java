@@ -1,11 +1,14 @@
-package xyz.iwolfking.woldsvaults.pouch.data;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch;
 
+import iskallia.vault.core.vault.ClassicPortalLogic;
 import iskallia.vault.core.vault.Vault;
+import iskallia.vault.core.vault.WorldManager;
 import iskallia.vault.core.vault.player.Listeners;
 import iskallia.vault.item.gear.VaultUsesHelper;
 import iskallia.vault.skill.base.Skill;
 import iskallia.vault.skill.expertise.type.TrinketerExpertise;
 import iskallia.vault.world.data.PlayerExpertisesData;
+import iskallia.vault.world.data.ServerVaults;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,30 +19,56 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
 import xyz.iwolfking.woldsvaults.mixins.vaulthunters.accessors.ClassicListenersLogicAccessor;
 
-/**
- * Loadout changes in a vault's start room, before its clock has ever run. Vault entry charged every active
- * trinket, so the charges follow the selection: activating charges exactly like entry, deactivating refunds.
- */
 public final class PouchStartRoom {
     public static final String TIME_TRINKET_FIXED = "Time trinkets stay as entered in the start room";
     private static final String REFUNDS = "WoldsStartRoomRefunds";
     private static final String REFUNDS_VAULT = "Vault";
     private static final String REFUNDS_SLOTS = "Slots";
+    private static final String LEFT_START_ROOM = "WoldsLeftStartRoom";
+    private static final double START_AREA_RADIUS_SQUARED = 15 * 15;
 
     private PouchStartRoom() {}
+
+    public static void trackDeparture(ServerPlayer player) {
+        if (!player.level.dimension().location().getNamespace().equals("the_vault")) {
+            return;
+        }
+        ServerVaults.get(player.level).ifPresent(vault -> {
+            if (!hasLeft(player, vault) && !insideStartArea(player, vault)) {
+                player.getPersistentData().putUUID(LEFT_START_ROOM, vault.get(Vault.ID));
+            }
+        });
+    }
+
+    public static boolean isOpen(ServerPlayer player, Vault vault) {
+        return !hasLeft(player, vault) && insideStartArea(player, vault);
+    }
+
+    private static boolean hasLeft(ServerPlayer player, Vault vault) {
+        CompoundTag data = player.getPersistentData();
+        return data.hasUUID(LEFT_START_ROOM) && data.getUUID(LEFT_START_ROOM).equals(vault.get(Vault.ID));
+    }
+
+    private static boolean insideStartArea(ServerPlayer player, Vault vault) {
+        return vault.has(Vault.WORLD) && vault.get(Vault.WORLD).get(WorldManager.PORTAL_LOGIC) instanceof ClassicPortalLogic logic
+                && logic.getPlayerStartPos(vault)
+                        .map(start -> player.distanceToSqr(Vec3.atCenterOf(start)) <= START_AREA_RADIUS_SQUARED)
+                        .orElse(false);
+    }
 
     public static String apply(ServerPlayer player, Vault vault, ItemStack pouch, PouchContents contents, List<Integer> requested) {
         Set<Integer> before = new HashSet<>(contents.activeIndices());
         Set<Integer> after = new HashSet<>(requested);
         for (int index : changedIndices(before, after)) {
-            // Entry added their time to the clock once; swapping them would keep or miss that time.
-            if (PouchRules.isTimeExtension(contents.getStackInSlot(index))) {
+            if (PouchHelper.isTimeExtension(contents.getStackInSlot(index))) {
                 return TIME_TRINKET_FIXED;
             }
         }
-        String error = PouchRules.validate(pouch, contents, requested, player, false);
+        String error = PouchHelper.validate(pouch, contents, requested, player, false);
         if (!error.isEmpty()) {
             return error;
         }
@@ -60,16 +89,15 @@ public final class PouchStartRoom {
         return "";
     }
 
-    /** Presets applied in the start room leave time trinkets exactly as they were at vault entry. */
     public static List<Integer> keepTimeTrinkets(PouchContents contents, List<Integer> requested) {
         List<Integer> kept = new ArrayList<>();
         for (int index : requested) {
-            if (!PouchRules.isTimeExtension(contents.getStackInSlot(index)) || contents.isActive(index)) {
+            if (!PouchHelper.isTimeExtension(contents.getStackInSlot(index)) || contents.isActive(index)) {
                 kept.add(index);
             }
         }
         for (int index : contents.activeIndices()) {
-            if (PouchRules.isTimeExtension(contents.getStackInSlot(index)) && !kept.contains(index)) {
+            if (PouchHelper.isTimeExtension(contents.getStackInSlot(index)) && !kept.contains(index)) {
                 kept.add(index);
             }
         }
@@ -109,7 +137,6 @@ public final class PouchStartRoom {
             return;
         }
         String key = String.valueOf(index);
-        // A refunded charge keeps its original outcome, so toggling cannot re-roll a free use.
         boolean free = refundedSlots.contains(key) ? refundedSlots.getBoolean(key) : rollFree(player, vault, stack);
         refundedSlots.remove(key);
         if (free) {

@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = TommyTradeScreen.class, remap = false)
-public abstract class MixinTommyPouchRewardAnimation {
+public abstract class MixinTommyTradeScreen {
     @Unique
     private int wolds$selectedRewardStage;
 
@@ -26,7 +26,6 @@ public abstract class MixinTommyPouchRewardAnimation {
     @WrapOperation(method = "finishTrinketAnimation", at = @At(value = "INVOKE",
             target = "Liskallia/vault/container/RoyaleDraftContainer;getTab(Ljava/util/UUID;)I"))
     private int advanceFromSelectedStage(RoyaleDraftContainer draft, UUID player, Operation<Integer> original) {
-        // The accepted reward synchronizes the next server stage before this client animation finishes.
         return wolds$selectedRewardStage;
     }
 }

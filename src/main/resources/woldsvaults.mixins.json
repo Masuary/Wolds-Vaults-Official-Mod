@@ -6,8 +6,7 @@
   "refmap": "woldsvaults.refmap.json",
   "plugin": "xyz.iwolfking.woldsvaults.mixins.plugins.WoldMixinPlugin",
   "mixins": [
-    "curios.MixinPouchInventoryRestore",
-    "vaulthunters.custom.MixinPouchTrinketEffects",
+    "curios.MixinCurioInventoryWrapper",
     "DimensionDataStorageAccessor",
     "GameRulesBooleanValueAccessor",
     "LivingEntityAccessor",
@@ -370,9 +369,8 @@
     "vaulthunters.custom.MixinRewardConfig",
     "vaulthunters.custom.MixinRoyaleDraftContainer",
     "vaulthunters.custom.MixinRoyalePresetConfig",
-    "vaulthunters.custom.MixinRoyalePouchSnapshot",
-    "vaulthunters.custom.MixinRoyalePouchEntry",
-    "vaulthunters.custom.MixinRoyaleDrafterIdentity",
+    "vaulthunters.custom.MixinRoyaleInventorySnapshotData",
+    "vaulthunters.custom.MixinRoyaleDrafterControllerTileEntity",
     "vaulthunters.custom.MixinRunner",
     "vaulthunters.custom.MixinScavengerObjective",
     "vaulthunters.custom.MixinServerboundRoyaleSelectTrinketMessage",
@@ -545,7 +543,7 @@
     "vaultintegrations.MixinAltarConduitNode"
   ],
   "client": [
-    "vaulthunters.custom.MixinTommyPouchRewardAnimation",
+    "vaulthunters.custom.MixinTommyTradeScreen",
     "AccessorParticleEngine",
     "MixinAnvilScreen",
     "MixinItemRenderer",

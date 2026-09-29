@@ -9,7 +9,7 @@ import net.minecraft.world.inventory.MenuType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchRoyale;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchRoyale;
 
 @Mixin(value = RoyaleDraftContainer.class, remap = false)
 public abstract class MixinRoyaleDraftContainer extends AbstractElementContainer {
@@ -21,7 +21,7 @@ public abstract class MixinRoyaleDraftContainer extends AbstractElementContainer
 
     /**
      * @author iwolfking
-     * @reason Both draft entry points must atomically insert a real reward, never a coloured-slot placeholder.
+     * @reason Insert the chosen trinket into the Royale pouch
      */
     @Overwrite
     public boolean selectTrinket(ResourceLocation trinket, boolean isBlue) {

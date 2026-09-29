@@ -35,11 +35,11 @@ import net.minecraft.world.item.ItemStack;
 import org.intellij.lang.annotations.Pattern;
 import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.SlotResult;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchCapability;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchUseTotals;
-import xyz.iwolfking.woldsvaults.pouch.client.PouchUseDisplay;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchCapability;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchContents;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchUseTotals;
+import xyz.iwolfking.woldsvaults.client.invhud.PouchUseDisplay;
 
 public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
     private final Supplier<List<ItemStack>> stackSupplier;
@@ -142,7 +142,7 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
 
                     String text = percent + "%";
                     if (opts.getIndicator().equals(InventoryHudElementOptions.Indicator.NUMBER) && this.isUsesItem(stack)) {
-                        text = String.valueOf(pooledUses == null ? PouchRules.remainingUses(stack) : pooledUses.remaining());
+                        text = String.valueOf(pooledUses == null ? PouchHelper.remainingUses(stack) : pooledUses.remaining());
                     }
 
                     if (stack.getItem() instanceof VaultGearItem item && item.isBroken(stack)) {
@@ -333,12 +333,12 @@ public class MultiItemHudModule extends AbstractHudModule<ModuleRenderContext> {
             }
         }
 
-        ItemStack pouch = PouchRules.equipped(player);
-        if (PouchRules.COLORS.contains(identifier) && PouchRules.isPouch(pouch)) {
+        ItemStack pouch = PouchHelper.equipped(player);
+        if (PouchHelper.COLORS.contains(identifier) && PouchHelper.isPouch(pouch)) {
             PouchContents contents = PouchCapability.get(pouch);
-            for (int index : PouchRules.validSelection(pouch, contents, contents.activeIndices())) {
+            for (int index : PouchHelper.validSelection(pouch, contents, contents.activeIndices())) {
                 ItemStack stack = contents.getStackInSlot(index);
-                if (identifier.equals(PouchRules.color(stack))) {
+                if (identifier.equals(PouchHelper.color(stack))) {
                     stacks.add(stack);
                 }
             }

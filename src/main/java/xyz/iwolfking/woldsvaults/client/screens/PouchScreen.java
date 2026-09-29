@@ -1,4 +1,4 @@
-package xyz.iwolfking.woldsvaults.pouch.client;
+package xyz.iwolfking.woldsvaults.client.screens;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -29,12 +29,16 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
-import xyz.iwolfking.woldsvaults.pouch.menu.PouchLayout;
-import xyz.iwolfking.woldsvaults.pouch.menu.PouchGridScroll;
-import xyz.iwolfking.woldsvaults.pouch.menu.PouchMenu;
-import xyz.iwolfking.woldsvaults.pouch.network.PouchNetwork;
+import xyz.iwolfking.woldsvaults.client.invhud.PouchUseDisplay;
+import xyz.iwolfking.woldsvaults.client.screens.widgets.PouchScrollBar;
+import xyz.iwolfking.woldsvaults.effect.trinkets.SpeedLimitTrinketEffect;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchContents;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.menu.PouchLayout;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.menu.PouchGridScroll;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.menu.PouchMenu;
+import xyz.iwolfking.woldsvaults.init.ModNetwork;
+import xyz.iwolfking.woldsvaults.network.packets.ServerboundRenameTrinketPouchPresetPacket;
 
 public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     private static final int TEXT = 0x404040;
@@ -46,6 +50,9 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     private final Set<String> activePresetKeys = new HashSet<>();
     private List<Entry> entries = List.of();
     private String inspectedKey = "";
+    private Component inspectedDescription = TextComponent.EMPTY;
+    private int inspectedDescriptionY;
+    private int inspectedDescriptionRows;
     private boolean keyboardNavigation;
     private final Set<GuiEventListener> pouchControls = new HashSet<>();
     private int colorFilter = -1;
@@ -260,9 +267,9 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     private void refreshEntries() {
         if (catalog.isEmpty()) {
             for (TrinketEffect<?> effect : TrinketEffectRegistry.getOrderedEntries()) {
-                if (effect.getConfig().hasCuriosSlot() && PouchRules.COLORS.contains(effect.getConfig().getCuriosSlot())) {
+                if (effect.getConfig().hasCuriosSlot() && PouchHelper.COLORS.contains(effect.getConfig().getCuriosSlot())) {
                     ItemStack icon = TrinketItem.createBaseTrinket(effect);
-                    catalog.put(PouchRules.effectKey(icon), icon);
+                    catalog.put(PouchHelper.effectKey(icon), icon);
                 }
             }
         }
@@ -270,17 +277,17 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         catalog.forEach((key, icon) -> combined.put(key, new Entry(icon, new ArrayList<>())));
         for (int slot = 0; slot < PouchContents.SIZE; slot++) {
             ItemStack stack = menu.contents().getStackInSlot(slot);
-            if (PouchRules.isTrinket(stack)) {
-                combined.computeIfAbsent(PouchRules.effectKey(stack), ignored -> new Entry(stack, new ArrayList<>())).indices().add(slot);
+            if (PouchHelper.isTrinket(stack)) {
+                combined.computeIfAbsent(PouchHelper.effectKey(stack), ignored -> new Entry(stack, new ArrayList<>())).indices().add(slot);
             }
         }
         entries = combined.values().stream()
-                .filter(entry -> colorFilter < 0 || PouchRules.COLORS.get(colorFilter).equals(PouchRules.color(entry.icon())))
+                .filter(entry -> colorFilter < 0 || PouchHelper.COLORS.get(colorFilter).equals(PouchHelper.color(entry.icon())))
                 .filter(entry -> !ownedOnly || !entry.indices().isEmpty())
                 .filter(entry -> entry.icon().getHoverName().getString().toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))
                 .sorted(Comparator.comparing(entry -> entry.icon().getHoverName().getString())).toList();
         collectionScroll.setEntryCount(entries.size());
-        if (entries.stream().noneMatch(entry -> PouchRules.effectKey(entry.icon()).equals(inspectedKey))) inspectedKey = "";
+        if (entries.stream().noneMatch(entry -> PouchHelper.effectKey(entry.icon()).equals(inspectedKey))) inspectedKey = "";
     }
 
     private Entry entry(int cell) {
@@ -293,7 +300,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             if (menu.contents().isActive(index)) return index;
         }
         return entry.indices().stream().min(Comparator.comparingInt(index -> {
-            int uses = PouchRules.remainingUses(menu.contents().getStackInSlot(index));
+            int uses = PouchHelper.remainingUses(menu.contents().getStackInSlot(index));
             return uses == 0 ? Integer.MAX_VALUE : uses;
         })).orElse(-1);
     }
@@ -332,9 +339,9 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             Component name = label(filter < 0 ? "all" : COLOR_NAMES[filter].toLowerCase(Locale.ROOT));
             String count = "";
             if (filter >= 0) {
-                String color = PouchRules.COLORS.get(filter);
-                long active = menu.contents().activeStacks().stream().filter(stack -> color.equals(PouchRules.color(stack))).count();
-                count = " " + active + "/" + PouchRules.capacities(menu.pouch()).getOrDefault(color, 0);
+                String color = PouchHelper.COLORS.get(filter);
+                long active = menu.contents().activeStacks().stream().filter(stack -> color.equals(PouchHelper.color(stack))).count();
+                count = " " + active + "/" + PouchHelper.capacities(menu.pouch()).getOrDefault(color, 0);
             }
             control.setMessage(text((colorFilter == filter ? "> " : "") + name.getString() + count));
         }
@@ -395,7 +402,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         if (dialog == Dialog.RENAME) {
             try {
                 String name = PouchContents.validatedPresetName(presetName.getValue());
-                PouchNetwork.CHANNEL.sendToServer(new PouchNetwork.Rename(menu.containerId, dialogPreset, name));
+                ModNetwork.sendToServer(new ServerboundRenameTrinketPouchPresetPacket(menu.containerId, dialogPreset, name));
             } catch (IllegalArgumentException exception) {
                 dialogError = label("invalid_name").getString();
                 return;
@@ -413,7 +420,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         if (view == View.STORAGE) refreshPresetCopies();
         int inspectedCell = collectionInspectedCell(mouseX, mouseY);
         if (view == View.COLLECTION && inspectedCell >= 0) {
-            inspectedKey = PouchRules.effectKey(entry(inspectedCell).icon());
+            inspectedKey = PouchHelper.effectKey(entry(inspectedCell).icon());
         }
         renderBackground(pose);
         super.render(pose, mouseX, mouseY, partialTick);
@@ -444,7 +451,6 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             if (!pouchControls.contains(listener) && listener instanceof AbstractWidget widget
                     && widget.x < leftPos + imageWidth && widget.x + widget.getWidth() > leftPos - PouchLayout.TAB_WIDTH
                     && widget.y < topPos + imageHeight && widget.y + widget.getHeight() > topPos) {
-                // Some injected widgets render even when invisible. Remove overlapping controls from both lists.
                 removeWidget(listener);
             }
         }
@@ -478,12 +484,12 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 int chosen = chosenIndex(entry);
                 boolean selected = chosen >= 0 && menu.contents().isActive(chosen);
                 collectionSlot(pose, x, y, selected);
-                int color = PouchRules.COLORS.indexOf(PouchRules.color(entry.icon()));
+                int color = PouchHelper.COLORS.indexOf(PouchHelper.color(entry.icon()));
                 if (color >= 0) fill(pose, x + 1, y + 1, x + 19, y + 2, 0xFF000000 | COLORS[color]);
                 itemRenderer.renderAndDecorateItem(entry.icon(), x + 2, y + 2);
                 RenderSystem.disableDepthTest();
                 if (chosen < 0) fill(pose, x + 2, y + 2, x + 18, y + 18, 0xAA8B8B8B);
-                else if (PouchRules.remainingUses(menu.contents().getStackInSlot(chosen)) == 0) {
+                else if (PouchHelper.remainingUses(menu.contents().getStackInSlot(chosen)) == 0) {
                     fill(pose, x + 2, y + 2, x + 18, y + 18, 0x88883333);
                 }
                 if (selected) check(pose, x + 1, y + 12);
@@ -502,7 +508,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                 int x = leftPos + previewX(cell);
                 int y = topPos + previewY(cell);
                 collectionSlot(pose, x, y, false);
-                int lane = PouchRules.COLORS.indexOf(PouchRules.color(stack));
+                int lane = PouchHelper.COLORS.indexOf(PouchHelper.color(stack));
                 if (lane >= 0) fill(pose, x + 1, y + 1, x + 19, y + 2, 0xFF000000 | COLORS[lane]);
                 itemRenderer.renderAndDecorateItem(stack, x + 2, y + 2);
                 if (entry.missing()) {
@@ -522,14 +528,14 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         activePresetKeys.clear();
         for (int index = 0; index < PouchContents.SIZE; index++) {
             ItemStack stack = menu.contents().getStackInSlot(index);
-            if (!PouchRules.isTrinket(stack)) continue;
-            String key = PouchRules.effectKey(stack);
+            if (!PouchHelper.isTrinket(stack)) continue;
+            String key = PouchHelper.effectKey(stack);
             if (menu.contents().isActive(index)) activePresetKeys.add(key);
-            if (PouchRules.remainingUses(stack) == 0) continue;
+            if (PouchHelper.remainingUses(stack) == 0) continue;
             Integer previous = usablePresetCopies.get(key);
             if (previous == null || !menu.contents().isActive(previous)
-                    && (menu.contents().isActive(index) || PouchRules.remainingUses(stack)
-                    < PouchRules.remainingUses(menu.contents().getStackInSlot(previous)))) {
+                    && (menu.contents().isActive(index) || PouchHelper.remainingUses(stack)
+                    < PouchHelper.remainingUses(menu.contents().getStackInSlot(previous)))) {
                 usablePresetCopies.put(key, index);
             }
         }
@@ -539,7 +545,6 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
 
     private PresetEntry presetEntry(int cell) {
         List<String> keys = menu.contents().preset(selectedPreset);
-        // A state packet can shrink the preset between container ticks and rendering.
         presetScroll.setEntryCount(keys.size());
         int index = presetScroll.entryIndex(cell);
         if (index < 0) return null;
@@ -587,7 +592,7 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         if (menu.contents().isActive(chosen)) return "";
         List<Integer> proposed = new ArrayList<>(menu.contents().activeIndices());
         proposed.add(chosen);
-        return PouchRules.validate(menu.pouch(), menu.contents(), proposed, minecraft.player, !menu.inStartRoom());
+        return PouchHelper.validate(menu.pouch(), menu.contents(), proposed, minecraft.player, !menu.inStartRoom());
     }
 
     @Override
@@ -621,7 +626,8 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
     }
 
     private void renderInspector(PoseStack pose) {
-        Entry inspected = entries.stream().filter(entry -> PouchRules.effectKey(entry.icon()).equals(inspectedKey)).findFirst().orElse(null);
+        Entry inspected = entries.stream().filter(entry -> PouchHelper.effectKey(entry.icon()).equals(inspectedKey)).findFirst().orElse(null);
+        inspectedDescription = TextComponent.EMPTY;
         if (inspected == null) {
             drawWrapped(pose, label("inspect_hint"), 190, 58, 84, 8, MUTED);
             return;
@@ -630,11 +636,15 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         Component name = inspected.icon().getHoverName();
         int chosen = chosenIndex(inspected);
         ItemStack inspectedStack = chosen >= 0 ? menu.contents().getStackInSlot(chosen) : inspected.icon();
-        Component description = PouchDescriptions.describe(inspectedStack, chosen >= 0);
+        Component description = description(inspectedStack, chosen >= 0);
         int descriptionY = 58 + Math.min(2, font.split(name, 84).size()) * 10 + 4;
+        int descriptionRows = Math.min(5, font.split(description, 84).size());
         drawWrapped(pose, name, 190, 58, 84, 2, TEXT);
         drawWrapped(pose, description, 190, descriptionY, 84, 5, MUTED);
-        int usesY = descriptionY + Math.min(5, font.split(description, 84).size()) * 10 + 6;
+        inspectedDescription = description;
+        inspectedDescriptionY = descriptionY;
+        inspectedDescriptionRows = descriptionRows;
+        int usesY = descriptionY + descriptionRows * 10 + 6;
         if (chosen >= 0) {
             font.draw(pose, fit(label("uses", PouchUseDisplay.remainingUses(menu.contents(), menu.contents().getStackInSlot(chosen))).getString(), 84),
                     190, usesY, TEXT);
@@ -654,12 +664,12 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         int chosen = chosenIndex(entry);
         if (chosen < 0) return label("not_in_pouch");
         if (!menu.canChangeLoadout()) return label("locked");
-        if (menu.inStartRoom() && PouchRules.isTimeExtension(menu.contents().getStackInSlot(chosen))) return label("time_fixed");
+        if (menu.inStartRoom() && PouchHelper.isTimeExtension(menu.contents().getStackInSlot(chosen))) return label("time_fixed");
         if (menu.contents().isActive(chosen)) return TextComponent.EMPTY;
-        if (PouchRules.remainingUses(menu.contents().getStackInSlot(chosen)) == 0) return label("exhausted");
+        if (PouchHelper.remainingUses(menu.contents().getStackInSlot(chosen)) == 0) return label("exhausted");
         String error = selectionError(entry);
         if (error.startsWith("No free ")) {
-            int color = PouchRules.COLORS.indexOf(PouchRules.color(entry.icon()));
+            int color = PouchHelper.COLORS.indexOf(PouchHelper.color(entry.icon()));
             return label("slots_full", label(COLOR_NAMES[color].toLowerCase(Locale.ROOT)));
         }
         return switch (error) {
@@ -693,6 +703,11 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
                         : blocked.copy().withStyle(ChatFormatting.RED);
                 tooltip(pose, mouseX, mouseY, index % PouchLayout.COLUMN_COUNT >= PouchLayout.COLUMN_COUNT / 2,
                         entry.icon().getHoverName(), action);
+                return true;
+            }
+            if (!inspectedDescription.getString().isBlank()
+                    && isMouseHintInside(mouseX, mouseY, 190, inspectedDescriptionY, 84, inspectedDescriptionRows * 10)) {
+                tooltip(pose, mouseX, mouseY, true, inspectedDescription.copy().withStyle(ChatFormatting.GRAY));
                 return true;
             }
             if (isHintTarget(ownership, mouseX, mouseY)) {
@@ -800,17 +815,35 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
             else wrapped.addAll(font.split(line, wrapWidth));
         }
         int tooltipWidth = Math.max(48, wrapped.stream().mapToInt(font::width).max().orElse(0));
-        // Legendary Tooltips pads centered titles after measurement. Reserve that space plus the native border.
         int anchorX = leftOfCursor ? Math.max(0, mouseX - tooltipWidth - 32)
                 : Math.max(0, Math.min(mouseX, width - tooltipWidth - 32));
         int anchorY = Math.max(16, Math.min(mouseY, height - 4));
         renderTooltip(pose, wrapped, anchorX, anchorY);
     }
 
+    private static Component description(ItemStack stack, boolean includeCopySettings) {
+        return new TextComponent(PouchHelper.effects(stack).stream()
+                .map(entry -> entry.trinket() instanceof SpeedLimitTrinketEffect && includeCopySettings
+                        ? speedLimit(stack).getString() + "\n" + effectText(entry.trinket()) : effectText(entry.trinket()))
+                .filter(value -> !value.isBlank())
+                .distinct().reduce((first, second) -> first + "\n" + second).orElse(""));
+    }
+
+    private static String effectText(TrinketEffect<?> effect) {
+        String configured = effect.getTrinketConfig() == null ? null : effect.getTrinketConfig().getEffectText();
+        return configured == null ? "" : configured.strip();
+    }
+
+    private static Component speedLimit(ItemStack stack) {
+        int capPercent = SpeedLimitTrinketEffect.getCapPercent(stack);
+        return new TranslatableComponent("gui.woldsvaults.pouch.speed_limit", capPercent == 0
+                ? new TranslatableComponent("gui.woldsvaults.pouch.speed_uncapped") : new TextComponent(capPercent + "%"));
+    }
+
     private List<Component> trinketTooltip(ItemStack stack) {
         List<Component> lines = new ArrayList<>();
         lines.add(stack.getHoverName().copy());
-        Component description = PouchDescriptions.describe(stack);
+        Component description = description(stack, true);
         if (!description.getString().isBlank()) lines.add(description.copy().withStyle(ChatFormatting.GRAY));
         lines.add(TextComponent.EMPTY);
         return lines;
@@ -821,9 +854,9 @@ public final class PouchScreen extends AbstractContainerScreen<PouchMenu> {
         if (!TrinketItem.isIdentified(stack)) {
             lines.add(label("identify_first").copy().withStyle(ChatFormatting.GRAY));
         } else {
-            lines.add(label("uses", PouchRules.remainingUses(stack)).copy().withStyle(ChatFormatting.GRAY));
+            lines.add(label("uses", PouchHelper.remainingUses(stack)).copy().withStyle(ChatFormatting.GRAY));
             boolean active = menu.contents().activeStacks().stream().anyMatch(stored -> stored == stack);
-            lines.add(label(active ? "active" : PouchRules.remainingUses(stack) == 0 ? "exhausted" : "inactive")
+            lines.add(label(active ? "active" : PouchHelper.remainingUses(stack) == 0 ? "exhausted" : "inactive")
                     .copy().withStyle(active ? ChatFormatting.GREEN : ChatFormatting.GRAY));
         }
         tooltip(pose, mouseX, mouseY, lines.toArray(Component[]::new));

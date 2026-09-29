@@ -82,6 +82,7 @@ import xyz.iwolfking.woldsvaults.items.TrinketPouchItem;
 import xyz.iwolfking.woldsvaults.items.gear.VaultLootSackItem;
 import xyz.iwolfking.woldsvaults.items.gear.VaultPlushieItem;
 import xyz.iwolfking.woldsvaults.items.gear.VaultTridentItem;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchRuntime;
 import xyz.iwolfking.woldsvaults.objectives.data.bosses.WoldBoss;
 import xyz.iwolfking.woldsvaults.talent.special.DebuffDamageBonusTalent;
 import xyz.iwolfking.woldsvaults.talent.special.WoldsAxeSpecializationTalent;
@@ -194,7 +195,7 @@ public class LivingEntityEvents {
     public static void curioChange(CurioChangeEvent event) {
         if (event.getEntityLiving() instanceof Player player
                 && (event.getFrom().getItem() instanceof TrinketPouchItem || event.getTo().getItem() instanceof TrinketPouchItem)) {
-            xyz.iwolfking.woldsvaults.pouch.data.PouchRuntime.update(player);
+            PouchRuntime.update(player);
         }
     }
 

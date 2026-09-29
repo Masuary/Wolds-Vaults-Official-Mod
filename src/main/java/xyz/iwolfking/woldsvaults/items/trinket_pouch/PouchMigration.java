@@ -1,4 +1,4 @@
-package xyz.iwolfking.woldsvaults.pouch.data;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
@@ -19,12 +19,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import top.theillusivec4.curios.api.CuriosApi;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
 
-/**
- * Moves pre-overhaul trinkets into pouch storage. Migration is best effort and never throws: it runs while
- * Curios loads player data and on every tick, where an exception would block login or crash the tick. Items
- * that cannot move (not a trinket, undecodable, or no free pouch entry) stay exactly where they were.
- */
 public final class PouchMigration {
     private static final ThreadLocal<Boolean> RESTORING = ThreadLocal.withInitial(() -> false);
     private static final UUID LEGACY_POUCH_MODIFIER = UUID.nameUUIDFromBytes("trinket_pouch0".getBytes(StandardCharsets.UTF_8));
@@ -57,7 +53,7 @@ public final class PouchMigration {
             return original;
         }
         ItemStack pouch = ItemStack.of(pouchEntry);
-        if (!PouchRules.isPouch(pouch) || !PouchCapability.get(pouch).isReadable()) {
+        if (!PouchHelper.isPouch(pouch) || !PouchCapability.get(pouch).isReadable()) {
             return original;
         }
         boolean changed = stored(pouch);
@@ -66,7 +62,7 @@ public final class PouchMigration {
         List<String> retainedItems = new ArrayList<>();
         for (int index = 0; index < curios.size(); index++) {
             CompoundTag curio = curios.getCompound(index);
-            if (!PouchRules.COLORS.contains(curio.getString("Identifier"))) {
+            if (!PouchHelper.COLORS.contains(curio.getString("Identifier"))) {
                 continue;
             }
             CompoundTag handler = curio.getCompound("StacksHandler");
@@ -86,7 +82,6 @@ public final class PouchMigration {
                 handler.getCompound("Stacks").put("Items", retained);
                 changed = true;
             }
-            // A legacy slot keeps its size while it still holds an item, so the player can take that item out.
             if (retained.isEmpty() && removeLegacyModifiers(handler)) {
                 changed = true;
             }
@@ -143,8 +138,8 @@ public final class PouchMigration {
         if (player.level.isClientSide) {
             return;
         }
-        ItemStack pouch = PouchRules.equipped(player);
-        if (!PouchRules.isPouch(pouch) || !PouchCapability.get(pouch).isReadable()) {
+        ItemStack pouch = PouchHelper.equipped(player);
+        if (!PouchHelper.isPouch(pouch) || !PouchCapability.get(pouch).isReadable()) {
             return;
         }
         stored(pouch);
@@ -153,7 +148,7 @@ public final class PouchMigration {
             List<Integer> moved = new ArrayList<>();
             List<String> retainedItems = new ArrayList<>();
             Set<String> colorsWithRetainedItems = new HashSet<>();
-            for (String color : PouchRules.COLORS) {
+            for (String color : PouchHelper.COLORS) {
                 handler.getStacksHandler(color).ifPresent(slots -> {
                     for (int index = 0; index < slots.getStacks().getSlots(); index++) {
                         ItemStack stack = slots.getStacks().getStackInSlot(index);
@@ -172,7 +167,7 @@ public final class PouchMigration {
             }
             activate(pouch, contents, moved);
             Multimap<String, AttributeModifier> obsolete = HashMultimap.create();
-            for (String color : PouchRules.COLORS) {
+            for (String color : PouchHelper.COLORS) {
                 if (colorsWithRetainedItems.contains(color)) {
                     continue;
                 }
@@ -207,7 +202,7 @@ public final class PouchMigration {
     }
 
     private static boolean canMove(ItemStack stack, PouchContents contents) {
-        return PouchRules.isStoredItem(stack) && stack.getCount() == 1 && contents.firstEmpty() >= 0;
+        return PouchHelper.isStoredItem(stack) && stack.getCount() == 1 && contents.firstEmpty() >= 0;
     }
 
     private static int insert(PouchContents contents, ItemStack stack) {
@@ -222,7 +217,7 @@ public final class PouchMigration {
         }
         List<Integer> active = new ArrayList<>(contents.activeIndices());
         active.addAll(moved);
-        contents.setActive(PouchRules.validSelection(pouch, contents, active));
+        contents.setActive(PouchHelper.validSelection(pouch, contents, active));
     }
 
     private static boolean removeLegacyModifiers(CompoundTag handler) {

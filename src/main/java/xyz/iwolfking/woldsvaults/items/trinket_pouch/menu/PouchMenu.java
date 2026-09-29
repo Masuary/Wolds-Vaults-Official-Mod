@@ -1,13 +1,14 @@
-package xyz.iwolfking.woldsvaults.pouch.menu;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch.menu;
 
-import xyz.iwolfking.woldsvaults.pouch.PouchRegistration;
-import xyz.iwolfking.woldsvaults.pouch.network.PouchNetwork;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchCapability;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchMigration;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchRuntime;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchStartRoom;
+import xyz.iwolfking.woldsvaults.init.ModContainers;
+import xyz.iwolfking.woldsvaults.init.ModNetwork;
+import xyz.iwolfking.woldsvaults.network.packets.ClientboundTrinketPouchStatePacket;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchCapability;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchContents;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchMigration;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchRuntime;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchStartRoom;
 import iskallia.vault.core.vault.Vault;
 import java.util.Optional;
 import java.util.ArrayList;
@@ -30,7 +31,6 @@ import net.minecraftforge.network.NetworkHooks;
 
 public final class PouchMenu extends AbstractContainerMenu {
     public static final int EQUIPPED = -1;
-    // Vanilla 1.18.2 decodes container button IDs with readByte, not readUnsignedByte.
     public static final int SAVE_PRESET = 0;
     public static final int APPLY_PRESET = SAVE_PRESET + PouchContents.PRESET_COUNT;
     public static final int AUTO_REPLACE = APPLY_PRESET + PouchContents.PRESET_COUNT;
@@ -63,7 +63,7 @@ public final class PouchMenu extends AbstractContainerMenu {
             return;
         }
         ItemStack pouch = locate(player, pouchSlot);
-        if (!PouchRules.isPouch(pouch)) {
+        if (!PouchHelper.isPouch(pouch)) {
             player.displayClientMessage(new TextComponent("Equip a trinket pouch or hold one to open it."), true);
             return;
         }
@@ -85,12 +85,12 @@ public final class PouchMenu extends AbstractContainerMenu {
     }
 
     private PouchMenu(int id, Inventory inventory, int pouchSlot, ItemStack pouch) {
-        super(PouchRegistration.POUCH_MENU.get(), id);
+        super(ModContainers.TRINKET_POUCH_CONTAINER, id);
         this.owner = inventory.player;
         this.pouchSlot = pouchSlot;
         this.pouch = pouch;
         this.contents = PouchCapability.get(pouch);
-        this.locked = PouchRules.locked(owner);
+        this.locked = PouchHelper.locked(owner);
         for (int index = 0; index < PouchContents.SIZE; index++) {
             addSlot(new SlotItemHandler(contents, index, PouchLayout.GRID_X + 1 + index % 9 * 18,
                     PouchLayout.GRID_Y + 1 + index / 9 * 18) {
@@ -116,7 +116,6 @@ public final class PouchMenu extends AbstractContainerMenu {
 
                 @Override
                 public int getMaxStackSize(ItemStack stack) {
-                    // The default SlotItemHandler probe temporarily empties the slot, which would clear the active selection.
                     return 1;
                 }
 
@@ -157,7 +156,7 @@ public final class PouchMenu extends AbstractContainerMenu {
 
     private static ItemStack locate(Player player, int slot) {
         if (slot == EQUIPPED) {
-            return PouchRules.equipped(player);
+            return PouchHelper.equipped(player);
         }
         return slot >= 0 && slot < player.getInventory().getContainerSize() ? player.getInventory().getItem(slot) : ItemStack.EMPTY;
     }
@@ -243,11 +242,11 @@ public final class PouchMenu extends AbstractContainerMenu {
 
     private void apply(List<Integer> active) {
         if (isLocked()) {
-            Optional<Vault> vault = isEquipped() ? PouchRules.startRoomVault(owner) : Optional.empty();
+            Optional<Vault> vault = isEquipped() ? PouchHelper.startRoomVault(owner) : Optional.empty();
             status = vault.map(startRoomVault -> PouchStartRoom.apply((ServerPlayer) owner, startRoomVault, pouch, contents, active))
                     .orElse("This pouch is locked inside vaults");
         } else {
-            status = PouchRules.validate(pouch, contents, active, owner);
+            status = PouchHelper.validate(pouch, contents, active, owner);
             if (status.isEmpty()) {
                 contents.setActive(active);
             }
@@ -303,7 +302,6 @@ public final class PouchMenu extends AbstractContainerMenu {
     @Override
     public void sendAllDataToRemote() {
         super.sendAllDataToRemote();
-        // Vanilla full corrections must also restore selections lost during client prediction.
         sendPouchState(true);
     }
 
@@ -316,7 +314,7 @@ public final class PouchMenu extends AbstractContainerMenu {
     private void sendPouchState(boolean force) {
         if (owner instanceof ServerPlayer player) {
             CompoundTag state = contents.serializeNBT();
-            state.putBoolean("Locked", PouchRules.locked(owner));
+            state.putBoolean("Locked", PouchHelper.locked(owner));
             state.putBoolean("StartRoom", inStartRoom());
             state.putString("Status", status);
             state.putInt("StatusPreset", statusPreset);
@@ -324,7 +322,7 @@ public final class PouchMenu extends AbstractContainerMenu {
             state.putInt("Feedback", feedback.ordinal());
             if (force || !state.equals(lastState)) {
                 lastState = state;
-                PouchNetwork.sendState(player, containerId, state);
+                ModNetwork.sendToClient(new ClientboundTrinketPouchStatePacket(containerId, state), player);
             }
         }
     }
@@ -356,8 +354,8 @@ public final class PouchMenu extends AbstractContainerMenu {
     public boolean hasRecentFeedback() {
         return feedback != Feedback.NONE && System.nanoTime() - statusReceivedAt < 3_000_000_000L;
     }
-    public boolean isLocked() { return owner.level.isClientSide ? locked : PouchRules.locked(owner); }
-    public boolean inStartRoom() { return owner.level.isClientSide ? startRoom : isEquipped() && PouchRules.startRoomVault(owner).isPresent(); }
+    public boolean isLocked() { return owner.level.isClientSide ? locked : PouchHelper.locked(owner); }
+    public boolean inStartRoom() { return owner.level.isClientSide ? startRoom : isEquipped() && PouchHelper.startRoomVault(owner).isPresent(); }
     public boolean canChangeLoadout() { return !isLocked() || inStartRoom(); }
     public boolean storedView() { return storedView; }
     public void setStoredView(boolean value) { storedView = value; }

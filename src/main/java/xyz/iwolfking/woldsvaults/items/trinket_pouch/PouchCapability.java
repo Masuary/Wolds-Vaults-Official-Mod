@@ -1,4 +1,4 @@
-package xyz.iwolfking.woldsvaults.pouch.data;
+package xyz.iwolfking.woldsvaults.items.trinket_pouch;
 
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -8,18 +8,24 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.capabilities.ICapabilitySerializable;
+import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
 
 public final class PouchCapability implements ICapabilitySerializable<CompoundTag> {
     public static final Capability<PouchContents> TYPE = CapabilityManager.get(new CapabilityToken<>() {});
-    // Retain the prototype's serialized key so filled test pouches remain readable without the addon.
+    // Existing pouches store their contents under this key.
     private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("trinketcollection", "contents");
     private final PouchContents contents = new PouchContents();
     private final LazyOptional<PouchContents> optional = LazyOptional.of(() -> contents);
 
+    public static void register(RegisterCapabilitiesEvent event) {
+        event.register(PouchContents.class);
+    }
+
     public static void attach(AttachCapabilitiesEvent<ItemStack> event) {
-        if (PouchRules.isPouch(event.getObject())) {
+        if (PouchHelper.isPouch(event.getObject())) {
             PouchCapability provider = new PouchCapability();
             event.addCapability(ID, provider);
             event.addListener(provider.optional::invalidate);
@@ -27,7 +33,7 @@ public final class PouchCapability implements ICapabilitySerializable<CompoundTa
     }
 
     public static PouchContents get(ItemStack pouch) {
-        return pouch.getCapability(TYPE).orElseThrow(() -> new IllegalStateException("Missing Trinket Collection capability on " + pouch.getItem()));
+        return pouch.getCapability(TYPE).orElseThrow(() -> new IllegalStateException("Missing trinket pouch capability on " + pouch.getItem()));
     }
 
     @Override

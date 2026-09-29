@@ -20,11 +20,11 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerPlayer;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchCapability;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchContents;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchMigration;
-import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
-import xyz.iwolfking.woldsvaults.pouch.menu.PouchMenu;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchCapability;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchContents;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.PouchMigration;
+import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.menu.PouchMenu;
 import org.jetbrains.annotations.NotNull;
 import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.SlotContext;
@@ -55,11 +55,10 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
         }
         ItemStack equippedStack = CuriosApi.getCuriosHelper().findCurio(context.entity(), "trinket_pouch", 0)
                 .map(SlotResult::stack).orElse(ItemStack.EMPTY);
-        // Curios re-validates equipped curios after every resource reload and ejects any that fail.
         if (equippedStack == stack) {
             return true;
         }
-        if (context.entity() instanceof Player player && PouchRules.locked(player)) {
+        if (context.entity() instanceof Player player && PouchHelper.locked(player)) {
             return false;
         }
         return equippedStack.isEmpty();
@@ -67,12 +66,12 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
 
     @Override
     public boolean canUnequip(SlotContext context, ItemStack stack) {
-        return !(context.entity() instanceof Player player) || !PouchRules.locked(player);
+        return !(context.entity() instanceof Player player) || !PouchHelper.locked(player);
     }
 
     @Override
     public Multimap<Attribute, AttributeModifier> getAttributeModifiers(SlotContext context, UUID uuid, ItemStack stack) {
-        if (context.entity() instanceof Player player && PouchRules.equipped(player) == stack) {
+        if (context.entity() instanceof Player player && PouchHelper.equipped(player) == stack) {
             PouchMigration.equipped(player);
         }
         return LinkedHashMultimap.create();
@@ -97,7 +96,7 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
     @Override
     public CompoundTag getShareTag(ItemStack stack) {
         CompoundTag share = stack.getTag() == null ? new CompoundTag() : stack.getTag().copy();
-        share.put("TrinketCollectionSync", PouchCapability.get(stack).serializeNBT());
+        share.put("PouchContents", PouchCapability.get(stack).serializeNBT());
         return share;
     }
 
@@ -108,10 +107,10 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
             return;
         }
         CompoundTag ordinary = share.copy();
-        ordinary.remove("TrinketCollectionSync");
+        ordinary.remove("PouchContents");
         stack.setTag(ordinary);
-        if (share.contains("TrinketCollectionSync", Tag.TAG_COMPOUND)) {
-            PouchCapability.get(stack).deserializeNBT(share.getCompound("TrinketCollectionSync"));
+        if (share.contains("PouchContents", Tag.TAG_COMPOUND)) {
+            PouchCapability.get(stack).deserializeNBT(share.getCompound("PouchContents"));
         }
     }
 
@@ -152,9 +151,9 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
     }
 
     private static void appendActiveTrinketsTooltip(ItemStack pouch, PouchContents contents, List<Component> tooltip) {
-        List<ItemStack> activeTrinkets = PouchRules.validSelection(pouch, contents, contents.activeIndices()).stream()
+        List<ItemStack> activeTrinkets = PouchHelper.validSelection(pouch, contents, contents.activeIndices()).stream()
                 .map(contents::getStackInSlot)
-                .sorted(Comparator.comparingInt(trinket -> PouchRules.COLORS.indexOf(PouchRules.color(trinket))))
+                .sorted(Comparator.comparingInt(trinket -> PouchHelper.COLORS.indexOf(PouchHelper.color(trinket))))
                 .toList();
         if (activeTrinkets.isEmpty()) {
             tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch.active.none")
@@ -164,14 +163,14 @@ public class TrinketPouchItem extends BasicItem implements ICurioItem {
         tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch.active", activeTrinkets.size())
                 .withStyle(ChatFormatting.GRAY));
         for (ItemStack trinket : activeTrinkets) {
-            ChatFormatting color = switch (PouchRules.color(trinket)) {
+            ChatFormatting color = switch (PouchHelper.color(trinket)) {
                 case "red_trinket" -> ChatFormatting.RED;
                 case "blue_trinket" -> ChatFormatting.AQUA;
                 case "green_trinket" -> ChatFormatting.GREEN;
                 default -> ChatFormatting.GRAY;
             };
             tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch.active.entry",
-                    trinket.getHoverName().copy().withStyle(color), PouchRules.remainingUses(trinket))
+                    trinket.getHoverName().copy().withStyle(color), PouchHelper.remainingUses(trinket))
                     .withStyle(ChatFormatting.GRAY));
         }
         tooltip.add(new TranslatableComponent("item.woldsvaults.trinket_pouch.active.equipped_only")

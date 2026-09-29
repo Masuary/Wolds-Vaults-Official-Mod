@@ -1,17 +1,17 @@
-package xyz.iwolfking.woldsvaults.pouch.client;
+package xyz.iwolfking.woldsvaults.client.screens.widgets;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.TextComponent;
 import org.lwjgl.glfw.GLFW;
-import xyz.iwolfking.woldsvaults.pouch.menu.PouchGridScroll;
+import xyz.iwolfking.woldsvaults.items.trinket_pouch.menu.PouchGridScroll;
 
-final class PouchScrollBar extends AbstractWidget {
+public final class PouchScrollBar extends AbstractWidget {
     private final PouchGridScroll scroll;
     private double grabOffset;
 
-    PouchScrollBar(int x, int y, int height, String label, PouchGridScroll scroll) {
+    public PouchScrollBar(int x, int y, int height, String label, PouchGridScroll scroll) {
         super(x, y, 6, height, new TextComponent(label));
         this.scroll = scroll;
     }
@@ -33,7 +33,7 @@ final class PouchScrollBar extends AbstractWidget {
         dragTo(mouseY);
     }
 
-    void dragTo(double mouseY) { scroll.dragThumb(mouseY - y - grabOffset, height); }
+    public void dragTo(double mouseY) { scroll.dragThumb(mouseY - y - grabOffset, height); }
 
     @Override
     public boolean keyPressed(int key, int scanCode, int modifiers) {
