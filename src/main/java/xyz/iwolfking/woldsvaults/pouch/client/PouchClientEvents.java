@@ -5,6 +5,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.TranslatableComponent;
+import java.util.OptionalInt;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ScreenEvent;
@@ -12,6 +14,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import top.theillusivec4.curios.common.inventory.CurioSlot;
 import xyz.iwolfking.woldsvaults.WoldsVaults;
 import xyz.iwolfking.woldsvaults.pouch.data.PouchRules;
 import xyz.iwolfking.woldsvaults.pouch.menu.PouchMenu;
@@ -47,14 +50,39 @@ public final class PouchClientEvents {
                 || screen instanceof PouchScreen || !screen.getMenu().getCarried().isEmpty()) {
             return;
         }
-        Slot slot = screen.getSlotUnderMouse();
-        if (slot == null || slot.container != client.player.getInventory() || !slot.mayPickup(client.player)
-                || !PouchRules.isPouch(slot.getItem())) {
+        Slot slot = slotAt(screen, event.getMouseX(), event.getMouseY());
+        if (slot == null || !PouchRules.isPouch(slot.getItem())) {
             return;
         }
-        // Cancel the inventory pickup; the server resolves the stack from its own inventory.
+        OptionalInt pouchSlot = openablePouchSlot(slot, client.player);
+        if (pouchSlot.isEmpty()) {
+            return;
+        }
+        // Cancel the pickup; the server resolves the stack from its own inventory or Curios slot.
         event.setCanceled(true);
-        PouchNetwork.CHANNEL.sendToServer(new PouchNetwork.Open(client.player.containerMenu.containerId, slot.getSlotIndex()));
+        PouchNetwork.CHANNEL.sendToServer(new PouchNetwork.Open(client.player.containerMenu.containerId, pouchSlot.getAsInt()));
+    }
+
+    private static Slot slotAt(AbstractContainerScreen<?> screen, double mouseX, double mouseY) {
+        for (Slot slot : screen.getMenu().slots) {
+            int left = screen.getGuiLeft() + slot.x;
+            int top = screen.getGuiTop() + slot.y;
+            if (slot.isActive() && mouseX >= left - 1 && mouseX < left + 17 && mouseY >= top - 1 && mouseY < top + 17) {
+                return slot;
+            }
+        }
+        return null;
+    }
+
+    private static OptionalInt openablePouchSlot(Slot slot, LocalPlayer player) {
+        // The equipped pouch stays viewable while locked in a vault, where its Curios slot refuses pickup.
+        if (slot instanceof CurioSlot curioSlot && curioSlot.getIdentifier().equals("trinket_pouch") && curioSlot.getSlotIndex() == 0) {
+            return OptionalInt.of(PouchMenu.EQUIPPED);
+        }
+        if (slot.container == player.getInventory() && slot.mayPickup(player)) {
+            return OptionalInt.of(slot.getSlotIndex());
+        }
+        return OptionalInt.empty();
     }
 
     @SubscribeEvent
