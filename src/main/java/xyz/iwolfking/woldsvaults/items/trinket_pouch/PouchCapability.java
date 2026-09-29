@@ -11,12 +11,12 @@ import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
+import xyz.iwolfking.woldsvaults.WoldsVaults;
 import xyz.iwolfking.woldsvaults.api.util.PouchHelper;
 
 public final class PouchCapability implements ICapabilitySerializable<CompoundTag> {
     public static final Capability<PouchContents> TYPE = CapabilityManager.get(new CapabilityToken<>() {});
-    // Existing pouches store their contents under this key.
-    private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("trinketcollection", "contents");
+    private static final ResourceLocation ID = WoldsVaults.id("trinket_pouch");
     private final PouchContents contents = new PouchContents();
     private final LazyOptional<PouchContents> optional = LazyOptional.of(() -> contents);
 
